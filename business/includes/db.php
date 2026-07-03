@@ -4,9 +4,9 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Kolkata');
 
 $dbHost = 'localhost';
-$dbName = 'gk_footwear';
-$dbUser = 'root';
-$dbPass = '';
+$dbName = 'u966043993_footwear';
+$dbUser = 'u966043993_footwear';
+$dbPass = '1E:dnF1Xh0';
 
 try {
     $pdo = new PDO(

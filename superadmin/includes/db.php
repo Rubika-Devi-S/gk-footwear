@@ -4,9 +4,9 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Kolkata');
 
 $dbHost = 'localhost';
-$dbName = 'gk_footwear';
-$dbUser = 'root';
-$dbPass = '';
+$dbName = 'u966043993_footwear';
+$dbUser = 'u966043993_footwear';
+$dbPass = '1E:dnF1Xh0';
 
 try {
     $pdo = new PDO(
@@ -22,4 +22,12 @@ try {
 } catch (PDOException $e) {
     die('Database connection failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
 }
+
+$conn = mysqli_connect($dbHost, $dbUser, $dbPass, $dbName);
+
+if (!$conn) {
+    die('Database connection failed: ' . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, 'UTF-8'));
+}
+
+mysqli_set_charset($conn, 'utf8mb4');
 ?>
