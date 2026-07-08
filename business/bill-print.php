@@ -1,409 +1,594 @@
 <?php
 /**
- * GK Footwear - FPDF Thermal Bill Print
- * -------------------------------------
- * URL: bill-print.php?bill_id=1&auto_print=1
- * Supports Composer: composer require setasign/fpdf
- * Fallbacks: /libs/fpdf.php, /includes/fpdf.php, /fpdf.php
+ * GK Footwear POS - Printable Bill with invoice barcode.
+ * Upload at project root: bill-print.php
+ *
+ * Modified to follow Create Bill GST method:
+ * - Show GSTIN / CGST / SGST / IGST only when GST is enabled.
+ * - Hide complete GST module when GST is OFF.
+ * - Keep barcode and barcode number for lookup / return / exchange.
  */
-
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/auth.php';
-require_once __DIR__ . '/includes/permissions.php';
 
-require_business_login();
-if (function_exists('require_page_access')) {
-    require_page_access($conn, 'pos-create-bill.php');
+/*
+ * Billing print must always use India time.
+ * This also keeps MySQL NOW()/created_at helper queries in the same timezone
+ * for this request.
+ */
+if (!defined('BP_TIMEZONE')) {
+    define('BP_TIMEZONE', 'Asia/Kolkata');
+}
+date_default_timezone_set(BP_TIMEZONE);
+
+if (isset($conn) && $conn instanceof mysqli) {
+    @mysqli_query($conn, "SET time_zone = '+05:30'");
 }
 
-$businessId = function_exists('current_business_id') ? (int) current_business_id() : (int)($_SESSION['business_id'] ?? 0);
-$sessionBranchId = function_exists('current_branch_id') ? (int) current_branch_id() : (int)($_SESSION['branch_id'] ?? 0);
-$userId = function_exists('current_user_id') ? (int) current_user_id() : (int)($_SESSION['user_id'] ?? 0);
-$roleId = function_exists('current_role_id') ? (int) current_role_id() : (int)($_SESSION['role_id'] ?? 0);
-$billId = (int)($_GET['bill_id'] ?? 0);
-$autoPrint = (int)($_GET['auto_print'] ?? $_GET['auto'] ?? 0) === 1;
+if (function_exists('require_business_login')) {
+    require_business_login();
+}
+
+function bp_e($value)
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function bp_money($value)
+{
+    return '₹' . number_format((float)$value, 2);
+}
+
+function bp_num($value)
+{
+    return round((float)$value, 2);
+}
+
+function bp_normalize_time_value($time)
+{
+    $time = trim((string)$time);
+
+    if ($time === '' || $time === '00:00:00' || $time === '0000-00-00 00:00:00') {
+        return '';
+    }
+
+    if (preg_match('/^(\d{1,2}:\d{2})(:\d{2})?/', $time, $m)) {
+        return $m[1] . (isset($m[2]) && $m[2] !== '' ? $m[2] : ':00');
+    }
+
+    return $time;
+}
+
+function bp_bill_print_datetime(array $bill)
+{
+    $tz = new DateTimeZone(BP_TIMEZONE);
+    $date = trim((string)($bill['bill_date'] ?? ''));
+    $time = bp_normalize_time_value($bill['bill_time'] ?? '');
+
+    if ($date !== '' && $date !== '0000-00-00') {
+        $value = $date . ($time !== '' ? ' ' . $time : '');
+
+        try {
+            $dt = new DateTimeImmutable($value, $tz);
+            return $dt->format('d-m-Y h:i:s A');
+        } catch (Throwable $e) {}
+    }
+
+    $createdAt = trim((string)($bill['created_at'] ?? ''));
+
+    if ($createdAt !== '' && $createdAt !== '0000-00-00 00:00:00') {
+        try {
+            $dt = new DateTimeImmutable($createdAt, $tz);
+            return $dt->format('d-m-Y h:i:s A');
+        } catch (Throwable $e) {}
+    }
+
+    return '-';
+}
+
+function bp_current_business_id()
+{
+    if (function_exists('current_business_id')) {
+        return (int)current_business_id();
+    }
+
+    return (int)($_SESSION['business_id'] ?? 0);
+}
+
+function bp_table_exists(mysqli $conn, $table)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT COUNT(*) total
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+    ");
+
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 's', $table);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    mysqli_stmt_close($stmt);
+
+    return (int)($row['total'] ?? 0) > 0;
+}
+
+function bp_column_exists(mysqli $conn, $table, $column)
+{
+    $stmt = mysqli_prepare($conn, "
+        SELECT COUNT(*) total
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
+    ");
+
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $table, $column);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    mysqli_stmt_close($stmt);
+
+    return (int)($row['total'] ?? 0) > 0;
+}
+
+function bp_fetch_one(mysqli $conn, $sql, $types = '', array $params = array())
+{
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        throw new Exception(mysqli_error($conn));
+    }
+
+    if ($types !== '') {
+        $bind = array($types);
+
+        foreach ($params as $k => $v) {
+            $bind[] = &$params[$k];
+        }
+
+        call_user_func_array(array($stmt, 'bind_param'), $bind);
+    }
+
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    mysqli_stmt_close($stmt);
+
+    return $row ?: null;
+}
+
+function bp_fetch_all(mysqli $conn, $sql, $types = '', array $params = array())
+{
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        throw new Exception(mysqli_error($conn));
+    }
+
+    if ($types !== '') {
+        $bind = array($types);
+
+        foreach ($params as $k => $v) {
+            $bind[] = &$params[$k];
+        }
+
+        call_user_func_array(array($stmt, 'bind_param'), $bind);
+    }
+
+    mysqli_stmt_execute($stmt);
+    $rs = mysqli_stmt_get_result($stmt);
+    $rows = array();
+
+    while ($row = mysqli_fetch_assoc($rs)) {
+        $rows[] = $row;
+    }
+
+    mysqli_stmt_close($stmt);
+
+    return $rows;
+}
+
+function bp_execute(mysqli $conn, $sql, $types = '', array $params = array())
+{
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        throw new Exception(mysqli_error($conn));
+    }
+
+    if ($types !== '') {
+        $bind = array($types);
+
+        foreach ($params as $k => $v) {
+            $bind[] = &$params[$k];
+        }
+
+        call_user_func_array(array($stmt, 'bind_param'), $bind);
+    }
+
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
+function bp_barcode_prefix(mysqli $conn, $businessId, $branchId)
+{
+    $prefix = 'BILL';
+
+    if (bp_table_exists($conn, 'barcode_settings')) {
+        $row = bp_fetch_one(
+            $conn,
+            "SELECT bill_barcode_prefix
+             FROM barcode_settings
+             WHERE business_id = ?
+               AND (branch_id = ? OR branch_id IS NULL)
+               AND status = 1
+             ORDER BY branch_id IS NULL ASC
+             LIMIT 1",
+            'ii',
+            array($businessId, $branchId)
+        );
+
+        if ($row && trim((string)$row['bill_barcode_prefix']) !== '') {
+            $prefix = trim((string)$row['bill_barcode_prefix']);
+        }
+    }
+
+    $prefix = preg_replace('/[^A-Za-z0-9]/', '', $prefix);
+
+    return $prefix !== '' ? strtoupper($prefix) : 'BILL';
+}
+
+function bp_ensure_bill_barcode(mysqli $conn, array $bill)
+{
+    $businessId = (int)$bill['business_id'];
+    $branchId = (int)$bill['branch_id'];
+    $billId = (int)$bill['bill_id'];
+
+    if (bp_table_exists($conn, 'bill_barcodes')) {
+        $row = bp_fetch_one(
+            $conn,
+            "SELECT barcode_value
+             FROM bill_barcodes
+             WHERE business_id = ?
+               AND branch_id = ?
+               AND bill_id = ?
+             ORDER BY bill_barcode_id DESC
+             LIMIT 1",
+            'iii',
+            array($businessId, $branchId, $billId)
+        );
+
+        if ($row && trim((string)$row['barcode_value']) !== '') {
+            return $row['barcode_value'];
+        }
+
+        $barcode = bp_barcode_prefix($conn, $businessId, $branchId) . '-' . str_pad((string)$billId, 6, '0', STR_PAD_LEFT);
+
+        bp_execute(
+            $conn,
+            "INSERT INTO bill_barcodes
+                (business_id, branch_id, bill_id, barcode_value, barcode_status, created_at)
+             VALUES
+                (?, ?, ?, ?, 'active', NOW())",
+            'iiis',
+            array($businessId, $branchId, $billId, $barcode)
+        );
+
+        return $barcode;
+    }
+
+    return bp_barcode_prefix($conn, $businessId, $branchId) . '-' . str_pad((string)$billId, 6, '0', STR_PAD_LEFT);
+}
+
+function bp_is_system_gst_enabled(array $bill)
+{
+    $businessGstKey = strtolower(trim((string)($bill['business_gst_type_key'] ?? '')));
+    $billGstKey = strtolower(trim((string)($bill['gst_type_key'] ?? '')));
+
+    if (in_array($businessGstKey, array('non_gst', 'no_gst', 'gst_off', 'off', 'none', 'disabled'), true)) {
+        return false;
+    }
+
+    return $businessGstKey === 'gst_regular'
+        || $billGstKey === 'gst_regular'
+        || bp_num($bill['tax_amount'] ?? 0) > 0;
+}
+
+function bp_is_bill_gst_applied(array $bill)
+{
+    return bp_is_system_gst_enabled($bill)
+        && strtolower(trim((string)($bill['gst_type_key'] ?? ''))) === 'gst_regular'
+        && bp_num($bill['tax_amount'] ?? 0) > 0;
+}
+
+$businessId = bp_current_business_id();
+$billId = isset($_GET['bill_id']) ? (int)$_GET['bill_id'] : 0;
 
 if ($businessId <= 0 || $billId <= 0) {
     die('Invalid bill request.');
 }
 
-function bp_table_exists(mysqli $conn, string $tableName): bool
-{
-    if (function_exists('table_exists')) {
-        return table_exists($conn, $tableName);
-    }
-    $stmt = mysqli_prepare($conn, "SELECT COUNT(*) total FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
-    mysqli_stmt_bind_param($stmt, 's', $tableName);
-    mysqli_stmt_execute($stmt);
-    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-    mysqli_stmt_close($stmt);
-    return ((int)($row['total'] ?? 0)) > 0;
-}
+try {
+    $businessGstSelect = bp_column_exists($conn, 'businesses', 'gst_type_key')
+        ? "bs.gst_type_key AS business_gst_type_key,"
+        : "'' AS business_gst_type_key,";
 
-function bp_table_has_column(mysqli $conn, string $tableName, string $columnName): bool
-{
-    if (function_exists('table_has_column')) {
-        return table_has_column($conn, $tableName, $columnName);
-    }
-    $stmt = mysqli_prepare($conn, "SELECT COUNT(*) total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
-    mysqli_stmt_bind_param($stmt, 'ss', $tableName, $columnName);
-    mysqli_stmt_execute($stmt);
-    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-    mysqli_stmt_close($stmt);
-    return ((int)($row['total'] ?? 0)) > 0;
-}
+    $bill = bp_fetch_one(
+        $conn,
+        "SELECT
+            b.*,
+            br.branch_name,
+            br.floor_name,
+            br.address AS branch_address,
+            br.mobile AS branch_mobile,
+            bs.business_name,
+            bs.address AS business_address,
+            bs.mobile AS business_mobile,
+            bs.gstin,
+            {$businessGstSelect}
+            bb.barcode_value AS saved_bill_barcode
+         FROM bills b
+         LEFT JOIN branches br
+            ON br.branch_id = b.branch_id
+           AND br.business_id = b.business_id
+         LEFT JOIN businesses bs
+            ON bs.business_id = b.business_id
+         LEFT JOIN bill_barcodes bb
+            ON bb.bill_id = b.bill_id
+           AND bb.business_id = b.business_id
+           AND bb.branch_id = b.branch_id
+           AND bb.barcode_status IN ('active', 'scanned')
+         WHERE b.business_id = ?
+           AND b.bill_id = ?
+           AND COALESCE(b.bill_status, 'active') <> 'deleted'
+         ORDER BY bb.bill_barcode_id DESC
+         LIMIT 1",
+        'ii',
+        array($businessId, $billId)
+    );
 
-function bp_one(mysqli $conn, string $sql, string $types = '', array $params = []): ?array
-{
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!$stmt) {
-        throw new RuntimeException(mysqli_error($conn));
-    }
-    if ($types !== '') {
-        mysqli_stmt_bind_param($stmt, $types, ...$params);
-    }
-    mysqli_stmt_execute($stmt);
-    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-    mysqli_stmt_close($stmt);
-    return $row ?: null;
-}
-
-function bp_all(mysqli $conn, string $sql, string $types = '', array $params = []): array
-{
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!$stmt) {
-        throw new RuntimeException(mysqli_error($conn));
-    }
-    if ($types !== '') {
-        mysqli_stmt_bind_param($stmt, $types, ...$params);
-    }
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $rows = [];
-    while ($row = mysqli_fetch_assoc($result)) {
-        $rows[] = $row;
-    }
-    mysqli_stmt_close($stmt);
-    return $rows;
-}
-
-function bp_exec(mysqli $conn, string $sql, string $types = '', array $params = []): void
-{
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!$stmt) {
-        return;
-    }
-    if ($types !== '') {
-        mysqli_stmt_bind_param($stmt, $types, ...$params);
-    }
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-}
-
-function bp_money($value): string
-{
-    return 'Rs. ' . number_format((float)$value, 2, '.', ',');
-}
-
-function bp_text($value): string
-{
-    $value = trim((string)$value);
-    $value = str_replace(["\r", "\n", "\t"], ' ', $value);
-    return preg_replace('/\s+/', ' ', $value) ?: '-';
-}
-
-function bp_load_fpdf(): void
-{
-    $candidates = [
-        __DIR__ . '/vendor/autoload.php',
-        __DIR__ . '/libs/fpdf.php',
-        __DIR__ . '/includes/fpdf.php',
-        __DIR__ . '/fpdf.php',
-    ];
-
-    foreach ($candidates as $file) {
-        if (file_exists($file)) {
-            require_once $file;
-            if (class_exists('FPDF')) {
-                return;
-            }
-        }
+    if (!$bill) {
+        die('Bill not found.');
     }
 
-    die('FPDF library not found. Run: composer require setasign/fpdf OR place fpdf.php inside /libs/fpdf.php');
-}
+    $items = bp_fetch_all(
+        $conn,
+        "SELECT
+            bi.*,
+            COALESCE(br.brand_name, '') AS brand_name
+         FROM bill_items bi
+         LEFT JOIN brands br
+            ON br.brand_id = bi.brand_id
+           AND br.business_id = bi.business_id
+         WHERE bi.business_id = ?
+           AND bi.branch_id = ?
+           AND bi.bill_id = ?
+         ORDER BY bi.bill_item_id ASC",
+        'iii',
+        array($businessId, (int)$bill['branch_id'], $billId)
+    );
 
-bp_load_fpdf();
+    $payments = bp_table_exists($conn, 'bill_payments')
+        ? bp_fetch_all(
+            $conn,
+            "SELECT
+                bp.*,
+                pm.payment_method_name,
+                pm.method_type
+             FROM bill_payments bp
+             LEFT JOIN payment_methods pm
+                ON pm.payment_method_id = bp.payment_method_id
+               AND pm.business_id = bp.business_id
+             WHERE bp.business_id = ?
+               AND bp.branch_id = ?
+               AND bp.bill_id = ?
+               AND bp.payment_status = 'received'
+             ORDER BY bp.payment_id ASC",
+            'iii',
+            array($businessId, (int)$bill['branch_id'], $billId)
+        )
+        : array();
 
-$bill = bp_one($conn, "
-    SELECT b.*, br.branch_name, br.branch_code, br.address AS branch_address, br.mobile AS branch_mobile,
-           bus.business_name, bus.owner_name, bus.address AS business_address, bus.mobile AS business_mobile,
-           bus.gstin AS business_gstin, bus.gst_type_key AS business_gst_type_key,
-           bb.barcode_value AS bill_barcode
-    FROM bills b
-    INNER JOIN businesses bus ON bus.business_id = b.business_id
-    INNER JOIN branches br ON br.branch_id = b.branch_id
-    LEFT JOIN bill_barcodes bb ON bb.bill_id = b.bill_id AND bb.barcode_status <> 'deleted'
-    WHERE b.business_id = ? AND b.bill_id = ? AND b.bill_status <> 'deleted'
-    LIMIT 1
-", 'ii', [$businessId, $billId]);
-
-if (!$bill) {
-    die('Bill not found.');
-}
-
-$billBranchId = (int)$bill['branch_id'];
-$isBusinessAdmin = function_exists('is_business_admin') ? (bool) is_business_admin($conn) : false;
-if ($sessionBranchId > 0 && $sessionBranchId !== $billBranchId && !$isBusinessAdmin) {
-    die('You do not have permission to print this branch bill.');
-}
-
-$invoice = bp_one($conn, "
-    SELECT *
-    FROM invoice_settings
-    WHERE business_id = ?
-      AND (branch_id = ? OR branch_id IS NULL)
-      AND status = 1
-    ORDER BY branch_id IS NULL ASC
-    LIMIT 1
-", 'ii', [$businessId, $billBranchId]);
-
-$items = bp_all($conn, "
-    SELECT bi.*, brd.brand_name, sii.color, sii.available_qty, sii.category_id, cat.category_name
-    FROM bill_items bi
-    LEFT JOIN brands brd ON brd.brand_id = bi.brand_id
-    LEFT JOIN stock_inward_items sii ON sii.stock_item_id = bi.stock_item_id
-    LEFT JOIN categories cat ON cat.category_id = sii.category_id
-    WHERE bi.business_id = ? AND bi.branch_id = ? AND bi.bill_id = ?
-    ORDER BY bi.bill_item_id ASC
-", 'iii', [$businessId, $billBranchId, $billId]);
-
-$payments = bp_all($conn, "
-    SELECT bp.*, pm.payment_method_name, pm.method_type
-    FROM bill_payments bp
-    LEFT JOIN payment_methods pm ON pm.payment_method_id = bp.payment_method_id
-    WHERE bp.business_id = ? AND bp.branch_id = ? AND bp.bill_id = ? AND bp.payment_status = 'received'
-    ORDER BY bp.payment_id ASC
-", 'iii', [$businessId, $billBranchId, $billId]);
-
-$paperSize = strtolower((string)($invoice['paper_size'] ?? '3-inch'));
-$isA4 = strpos($paperSize, 'a4') !== false;
-
-class GKBillPDF extends FPDF
-{
-    public $autoPrint = false;
-
-    function Footer()
-    {
-        // Thermal receipts normally do not need page numbers.
+    $barcodeValue = trim((string)($bill['saved_bill_barcode'] ?? ''));
+    if ($barcodeValue === '') {
+        $barcodeValue = bp_ensure_bill_barcode($conn, $bill);
     }
-
-    function AutoPrint($dialog = true)
-    {
-        $param = $dialog ? 'true' : 'false';
-        $script = "print($param);";
-        $this->IncludeJS($script);
-    }
-
-    protected $javascript;
-    protected $n_js;
-
-    function IncludeJS($script)
-    {
-        $this->javascript = $script;
-    }
-
-    function _putjavascript()
-    {
-        $this->_newobj();
-        $this->n_js = $this->n;
-        $this->_put('<<');
-        $this->_put('/Names [(EmbeddedJS) '.($this->n + 1).' 0 R]');
-        $this->_put('>>');
-        $this->_put('endobj');
-        $this->_newobj();
-        $this->_put('<<');
-        $this->_put('/S /JavaScript');
-        $this->_put('/JS '.$this->_textstring($this->javascript));
-        $this->_put('>>');
-        $this->_put('endobj');
-    }
-
-    function _putresources()
-    {
-        parent::_putresources();
-        if (!empty($this->javascript)) {
-            $this->_putjavascript();
-        }
-    }
-
-    function _putcatalog()
-    {
-        parent::_putcatalog();
-        if (!empty($this->javascript)) {
-            $this->_put('/Names <</JavaScript '.($this->n_js).' 0 R>>');
-        }
-    }
+} catch (Throwable $e) {
+    die('Print error: ' . bp_e($e->getMessage()));
 }
 
-$itemHeight = max(8, count($items) * 9);
-$thermalHeight = 92 + $itemHeight + (count($payments) * 5) + 28;
-$pdf = $isA4 ? new GKBillPDF('P', 'mm', 'A4') : new GKBillPDF('P', 'mm', [80, max(180, $thermalHeight)]);
-$pdf->SetMargins($isA4 ? 12 : 4, $isA4 ? 10 : 5, $isA4 ? 12 : 4);
-$pdf->SetAutoPageBreak(true, $isA4 ? 12 : 5);
-$pdf->AddPage();
-$pdf->SetTitle('Bill ' . (string)$bill['bill_no']);
-$pdf->SetAuthor('GK Footwear POS');
+$autoPrint = isset($_GET['auto_print']) && (string)$_GET['auto_print'] === '1';
+$barcodeSrc = 'barcode-image.php?code=' . rawurlencode($barcodeValue);
+$billPrintDateTime = bp_bill_print_datetime($bill);
 
-$pageWidth = $pdf->GetPageWidth();
-$left = $isA4 ? 12 : 4;
-$contentWidth = $pageWidth - ($left * 2);
+$systemGstEnabled = bp_is_system_gst_enabled($bill);
+$billGstApplied = bp_is_bill_gst_applied($bill);
 
-$pdf->SetFont('Arial', 'B', $isA4 ? 18 : 15);
-$pdf->Cell($contentWidth, 6, bp_text($bill['business_name']), 0, 1, 'C');
-$pdf->SetFont('Arial', '', $isA4 ? 10 : 8);
-$pdf->MultiCell($contentWidth, 4, bp_text($bill['business_address'] ?: $bill['branch_address']), 0, 'C');
-$invoiceTitle = bp_text($bill['invoice_title'] ?: ($invoice['invoice_title'] ?? 'Bill of Supply'));
-$gstLine = $invoiceTitle;
-if (!empty($bill['business_gstin']) && (int)($invoice['show_gstin'] ?? 1) === 1) {
-    $gstLine .= ' - GSTIN: ' . bp_text($bill['business_gstin']);
-}
-$pdf->MultiCell($contentWidth, 4, $gstLine, 0, 'C');
-$pdf->Ln(2);
-$pdf->Line($left, $pdf->GetY(), $pageWidth - $left, $pdf->GetY());
-$pdf->Ln(4);
-
-$pdf->SetFont('Arial', 'B', $isA4 ? 10 : 8.5);
-$rowH = $isA4 ? 6 : 5;
-function bp_info_row($pdf, $label, $value, $width, $rowH)
-{
-    $pdf->SetFont('Arial', 'B', 8.5);
-    $pdf->Cell($width * 0.36, $rowH, $label, 0, 0, 'L');
-    $pdf->SetFont('Arial', 'B', 8.5);
-    $pdf->Cell($width * 0.64, $rowH, bp_text($value), 0, 1, 'R');
+$taxableAmount = bp_num($bill['taxable_amount'] ?? 0);
+if ($taxableAmount <= 0 && $billGstApplied) {
+    $taxableAmount = max(0, bp_num($bill['selling_amount'] ?? 0) - bp_num($bill['bill_discount_amount'] ?? 0) - bp_num($bill['loyalty_redeem_amount'] ?? 0));
 }
 
-$billDateTime = bp_text($bill['bill_date'] . ' ' . ($bill['bill_time'] ?? ''));
-bp_info_row($pdf, 'Bill No', $bill['bill_no'], $contentWidth, $rowH);
-bp_info_row($pdf, 'Date', $billDateTime, $contentWidth, $rowH);
-bp_info_row($pdf, 'Branch', $bill['branch_name'], $contentWidth, $rowH);
-bp_info_row($pdf, 'Customer', $bill['customer_name'] ?: 'Walk-in Customer', $contentWidth, $rowH);
-if (!empty($bill['customer_mobile'])) {
-    bp_info_row($pdf, 'Mobile', $bill['customer_mobile'], $contentWidth, $rowH);
-}
-$pdf->Ln(2);
-$pdf->Line($left, $pdf->GetY(), $pageWidth - $left, $pdf->GetY());
-$pdf->Ln(4);
+$cgstAmount = $billGstApplied ? bp_num($bill['cgst_amount'] ?? 0) : 0;
+$sgstAmount = $billGstApplied ? bp_num($bill['sgst_amount'] ?? 0) : 0;
+$igstAmount = $billGstApplied ? bp_num($bill['igst_amount'] ?? 0) : 0;
+$taxAmount = $billGstApplied ? bp_num($bill['tax_amount'] ?? 0) : 0;
 
-$pdf->SetFont('Arial', 'B', $isA4 ? 9 : 8);
-$itemW = $contentWidth - 35;
-$pdf->Cell($itemW, 5, 'Item', 0, 0, 'L');
-$pdf->Cell(8, 5, 'Qty', 0, 0, 'R');
-$pdf->Cell(13, 5, 'Rate', 0, 0, 'R');
-$pdf->Cell(14, 5, 'Amt', 0, 1, 'R');
-$pdf->Line($left, $pdf->GetY(), $pageWidth - $left, $pdf->GetY());
-$pdf->Ln(2);
+$paidStatus = strtoupper((string)($bill['payment_status'] ?? 'pending'));
+$invoiceTitle = trim((string)($bill['invoice_title'] ?? ''));
+if ($invoiceTitle === '') {
+    $invoiceTitle = $billGstApplied ? 'Tax Invoice' : 'Bill of Supply';
+}
+?>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><?= bp_e($bill['bill_no']) ?> - Print</title>
+<style>
+body{margin:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#111827}
+.print-wrap{width:78mm;max-width:100%;margin:12px auto;background:#fff;padding:10px 12px;border:1px solid #e5e7eb}
+.center{text-align:center}.muted{color:#6b7280;font-size:10px}.title{font-size:17px;font-weight:800;margin:0}.sub{font-size:10px}
+.line{border-top:1px dashed #9ca3af;margin:7px 0}
+.info{width:100%;font-size:10.5px}.info td{padding:2px 0}.right{text-align:right}
+.items{width:100%;border-collapse:collapse;font-size:10px}
+.items th,.items td{padding:4px 2px;border-bottom:1px dashed #d1d5db;vertical-align:top}
+.items th{text-align:left}
+.total-row td{font-weight:800;font-size:12px}
+.gst-row td{font-size:10.2px}
+.status-pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:800;background:#dcfce7;color:#15803d}
+.status-pill.pending{background:#fef3c7;color:#92400e}
+.status-pill.partial{background:#dbeafe;color:#1d4ed8}
+.status-pill.cancelled{background:#fee2e2;color:#b91c1c}
+.barcode-box{margin:9px 0 3px;text-align:center;padding:7px 0;border-top:1px dashed #9ca3af;border-bottom:1px dashed #9ca3af}
+.barcode-box img{width:64mm;max-width:100%;height:18mm;object-fit:contain}
+.barcode-no{font-size:11px;font-weight:800;letter-spacing:.1em;margin-top:3px}
+.actions{text-align:center;margin:10px}
+.btn{border:0;border-radius:999px;padding:8px 13px;font-weight:700;background:#0f172a;color:#fff;cursor:pointer}
+.btn.secondary{background:#e2e8f0;color:#0f172a}
+@media print{
+    @page{size:78mm auto;margin:0}
+    body{background:#fff}
+    .print-wrap{border:0;margin:0;width:78mm;padding:5px 7px}
+    .actions{display:none}
+    .barcode-box img{height:17mm}
+}
+</style>
+</head>
+<body>
+<div class="actions">
+    <button class="btn" onclick="window.print()">Print</button>
+    <button class="btn secondary" onclick="window.close()">Close</button>
+</div>
 
-$pdf->SetFont('Arial', '', $isA4 ? 8.5 : 7.5);
-foreach ($items as $item) {
-    $nameParts = [];
-    $nameParts[] = $item['article_name'] ?: $item['article_no'];
-    if (!empty($item['size'])) { $nameParts[] = $item['size']; }
-    if (!empty($item['color'])) { $nameParts[] = $item['color']; }
-    $nameLine = bp_text(implode(' / ', $nameParts));
-    $articleLine = bp_text($item['article_no'] . (!empty($item['brand_name']) ? ' - ' . $item['brand_name'] : ''));
-    $y = $pdf->GetY();
-    $pdf->SetFont('Arial', 'B', $isA4 ? 8.5 : 7.5);
-    $pdf->MultiCell($itemW, 4, $nameLine, 0, 'L');
-    $pdf->SetX($left);
-    $pdf->SetFont('Arial', '', $isA4 ? 8 : 7);
-    $pdf->Cell($itemW, 4, $articleLine, 0, 0, 'L');
-    $lineEndY = $pdf->GetY() + 4;
-    $pdf->SetXY($left + $itemW, $y);
-    $pdf->SetFont('Arial', 'B', $isA4 ? 8.5 : 7.5);
-    $pdf->Cell(8, 5, rtrim(rtrim(number_format((float)$item['qty'], 2, '.', ''), '0'), '.'), 0, 0, 'R');
-    $pdf->Cell(13, 5, number_format((float)$item['selling_rate'], 2), 0, 0, 'R');
-    $pdf->Cell(14, 5, number_format((float)$item['amount'], 2), 0, 1, 'R');
-    $pdf->SetY(max($lineEndY, $pdf->GetY()) + 1);
-}
+<section class="print-wrap">
+    <div class="center">
+        <h1 class="title"><?= bp_e($bill['business_name'] ?: 'GK FOOTWEAR') ?></h1>
+        <div class="muted"><?= bp_e($bill['business_address'] ?: $bill['branch_address']) ?></div>
+        <?php if ($systemGstEnabled && !empty($bill['gstin'])): ?>
+            <div class="muted">GSTIN: <?= bp_e($bill['gstin']) ?></div>
+        <?php endif; ?>
+        <div class="sub"><b><?= bp_e($invoiceTitle) ?></b></div>
+    </div>
 
-$pdf->Ln(1);
-$pdf->Line($left, $pdf->GetY(), $pageWidth - $left, $pdf->GetY());
-$pdf->Ln(4);
+    <div class="line"></div>
 
-function bp_amount_row($pdf, $label, $value, $width, $bold = false)
-{
-    $pdf->SetFont('Arial', $bold ? 'B' : '', $bold ? 10 : 8.2);
-    $pdf->Cell($width * 0.55, 5, $label, 0, 0, 'L');
-    $pdf->Cell($width * 0.45, 5, bp_money($value), 0, 1, 'R');
-}
+    <table class="info">
+        <tr><td>Bill No</td><td class="right"><b><?= bp_e($bill['bill_no']) ?></b></td></tr>
+        <tr><td>Order No</td><td class="right"><?= bp_e($bill['order_no']) ?></td></tr>
+        <tr><td>Date & Time</td><td class="right"><?= bp_e($billPrintDateTime) ?></td></tr>
+        <tr>
+            <td>Customer</td>
+            <td class="right">
+                <?= bp_e($bill['customer_name'] ?: 'Walk-in Customer') ?>
+                <?= $bill['customer_mobile'] ? '<br>' . bp_e($bill['customer_mobile']) : '' ?>
+            </td>
+        </tr>
+        <tr><td>Branch</td><td class="right"><?= bp_e(trim(($bill['branch_name'] ?: '') . ' ' . ($bill['floor_name'] ?: ''))) ?></td></tr>
+        <tr>
+            <td>Status</td>
+            <td class="right">
+                <span class="status-pill <?= bp_e(strtolower($bill['payment_status'] ?? 'pending')) ?>"><?= bp_e($paidStatus) ?></span>
+            </td>
+        </tr>
+    </table>
 
-bp_amount_row($pdf, 'MRP Total', $bill['mrp_total'], $contentWidth);
-bp_amount_row($pdf, 'Product Discount', $bill['item_discount_total'], $contentWidth);
-if ((float)$bill['bill_discount_amount'] > 0) {
-    bp_amount_row($pdf, 'Bill Discount', $bill['bill_discount_amount'], $contentWidth);
-}
-if ((float)$bill['loyalty_redeem_amount'] > 0) {
-    bp_amount_row($pdf, 'Loyalty Redeem', $bill['loyalty_redeem_amount'], $contentWidth);
-}
-if ((int)($invoice['show_today_savings'] ?? 1) === 1) {
-    bp_amount_row($pdf, "Today's Savings", $bill['today_savings_amount'], $contentWidth);
-}
-bp_amount_row($pdf, 'Net Amount', $bill['net_amount'], $contentWidth);
-bp_amount_row($pdf, 'Round Off', $bill['round_off'], $contentWidth);
-$pdf->Line($left, $pdf->GetY(), $pageWidth - $left, $pdf->GetY());
-bp_amount_row($pdf, 'Grand Total', $bill['net_amount'], $contentWidth, true);
+    <div class="line"></div>
 
-$pdf->SetFont('Arial', '', $isA4 ? 8.5 : 7.5);
-foreach ($payments as $payment) {
-    $label = 'Paid ' . bp_text($payment['payment_method_name'] ?: $payment['method_type']);
-    bp_amount_row($pdf, $label, $payment['paid_amount'], $contentWidth);
-}
-bp_amount_row($pdf, 'Balance', $bill['balance_amount'], $contentWidth);
+    <table class="items">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th class="right">Qty</th>
+                <th class="right">Rate</th>
+                <th class="right">Amt</th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php if (!$items): ?>
+            <tr><td colspan="4" class="center muted">No items found.</td></tr>
+        <?php endif; ?>
+        <?php foreach ($items as $item): ?>
+            <tr>
+                <td>
+                    <b><?= bp_e($item['article_name'] ?: $item['article_no']) ?></b><br>
+                    <span class="muted">
+                        <?= bp_e($item['article_no']) ?>
+                        <?= $item['size'] ? ' / Size ' . bp_e($item['size']) : '' ?>
+                        <?= $item['brand_name'] ? ' / ' . bp_e($item['brand_name']) : '' ?>
+                    </span>
+                </td>
+                <td class="right"><?= number_format((float)$item['qty'], 2) ?></td>
+                <td class="right"><?= number_format((float)$item['selling_rate'], 2) ?></td>
+                <td class="right"><?= number_format((float)$item['amount'], 2) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
 
-$pdf->Ln(2);
-if (!empty($bill['bill_barcode']) && (int)($invoice['show_barcode'] ?? 1) === 1) {
-    $pdf->SetFont('Arial', 'B', $isA4 ? 8 : 7.5);
-    $pdf->Cell($contentWidth, 5, 'Barcode: ' . bp_text($bill['bill_barcode']), 0, 1, 'C');
-}
+    <table class="info">
+        <tr><td>MRP Total</td><td class="right"><?= bp_money($bill['mrp_total']) ?></td></tr>
+        <?php if ((float)($bill['item_discount_total'] ?? 0) > 0): ?>
+            <tr><td>Item Discount</td><td class="right">- <?= bp_money($bill['item_discount_total']) ?></td></tr>
+        <?php endif; ?>
+        <?php if ((float)($bill['bill_discount_amount'] ?? 0) > 0): ?>
+            <tr><td>Bill Discount</td><td class="right">- <?= bp_money($bill['bill_discount_amount']) ?></td></tr>
+        <?php endif; ?>
 
-if ((int)($invoice['show_composition_note'] ?? 1) === 1 && !empty($invoice['composition_note'])) {
-    $pdf->SetFont('Arial', '', $isA4 ? 8 : 7);
-    $pdf->MultiCell($contentWidth, 4, bp_text($invoice['composition_note']), 0, 'C');
-}
-if (!empty($invoice['footer_text'])) {
-    $pdf->Ln(1);
-    $pdf->SetFont('Arial', 'B', $isA4 ? 8 : 7);
-    $pdf->MultiCell($contentWidth, 4, bp_text($invoice['footer_text']), 0, 'C');
-}
-$pdf->Ln(1);
-$pdf->SetFont('Arial', '', $isA4 ? 7.5 : 6.5);
-$pdf->Cell($contentWidth, 4, 'Thank you. Visit again.', 0, 1, 'C');
+        <?php if ($billGstApplied): ?>
+            <tr class="gst-row"><td>Taxable Amount</td><td class="right"><?= bp_money($taxableAmount) ?></td></tr>
+            <?php if ($cgstAmount > 0): ?><tr class="gst-row"><td>CGST</td><td class="right"><?= bp_money($cgstAmount) ?></td></tr><?php endif; ?>
+            <?php if ($sgstAmount > 0): ?><tr class="gst-row"><td>SGST</td><td class="right"><?= bp_money($sgstAmount) ?></td></tr><?php endif; ?>
+            <?php if ($igstAmount > 0): ?><tr class="gst-row"><td>IGST</td><td class="right"><?= bp_money($igstAmount) ?></td></tr><?php endif; ?>
+            <tr class="gst-row"><td>Total GST</td><td class="right"><?= bp_money($taxAmount) ?></td></tr>
+        <?php endif; ?>
 
-bp_exec($conn, "UPDATE bills SET print_count = print_count + 1 WHERE bill_id = ? AND business_id = ?", 'ii', [$billId, $businessId]);
-if (bp_table_exists($conn, 'business_activity_logs')) {
-    $newValue = json_encode(['bill_id' => $billId, 'bill_no' => $bill['bill_no'], 'print_count_incremented' => true]);
-    bp_exec($conn, "
-        INSERT INTO business_activity_logs
-            (business_id, branch_id, user_id, role_id, module_name, action_type, record_id, old_value, new_value, ip_address, device_details)
-        VALUES
-            (?, ?, ?, ?, 'POS Billing', 'bill_print', ?, NULL, ?, ?, ?)
-    ", 'iiiiisss', [
-        $businessId,
-        $billBranchId,
-        $userId ?: null,
-        $roleId ?: null,
-        $billId,
-        $newValue,
-        $_SERVER['REMOTE_ADDR'] ?? '',
-        $_SERVER['HTTP_USER_AGENT'] ?? '',
-    ]);
-}
+        <?php if ((float)($bill['round_off'] ?? 0) != 0): ?>
+            <tr><td>Round Off</td><td class="right"><?= bp_money($bill['round_off']) ?></td></tr>
+        <?php endif; ?>
 
-if ($autoPrint) {
-    $pdf->AutoPrint(true);
-}
+        <tr class="total-row"><td>Grand Total</td><td class="right"><?= bp_money($bill['net_amount']) ?></td></tr>
+        <tr><td>Paid</td><td class="right"><?= bp_money($bill['paid_amount']) ?></td></tr>
+        <tr><td>Balance</td><td class="right"><?= bp_money($bill['balance_amount']) ?></td></tr>
+    </table>
 
-$pdf->Output('I', 'Bill-' . preg_replace('/[^A-Za-z0-9_-]/', '-', (string)$bill['bill_no']) . '.pdf');
-exit;
+    <?php if ($payments): ?>
+        <div class="line"></div>
+        <table class="info">
+            <?php foreach ($payments as $payment): ?>
+                <tr>
+                    <td><?= bp_e($payment['payment_method_name'] ?: $payment['method_type']) ?></td>
+                    <td class="right"><?= bp_money($payment['paid_amount']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
+    <?php endif; ?>
+
+    <div class="barcode-box">
+        <img src="<?= bp_e($barcodeSrc) ?>" alt="Bill barcode <?= bp_e($barcodeValue) ?>">
+        <div class="barcode-no"><?= bp_e($barcodeValue) ?></div>
+    </div>
+
+    <div class="center muted">Use this barcode for bill lookup, collection, returns and verification.</div>
+    <div class="center muted" style="margin-top:6px;">Thank you. Visit again.</div>
+</section>
+
+<?php if ($autoPrint): ?>
+<script>
+window.addEventListener('load', function () {
+    setTimeout(function () {
+        window.print();
+    }, 350);
+});
+</script>
+<?php endif; ?>
+</body>
+</html>

@@ -115,6 +115,9 @@ if ($businessId <= 0) {
         .badge-count { background: #fef3c7; color: #b45309; }
         .badge-type { background: #ede9fe; color: #6d28d9; }
         .mp-action-btn { border-radius: 999px; font-size: 10.5px; font-weight: 700; padding: 5px 8px; display: inline-flex; align-items: center; gap: 4px; line-height: 1; }
+        .barcode-print-btn { border-radius: 999px; font-size: 10px; font-weight: 800; padding: 5px 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; line-height: 1; color:#047857; border:1px solid #a7f3d0; background:#ecfdf5; text-decoration:none; white-space:nowrap; }
+        .barcode-print-btn:hover { color:#ffffff; background:#059669; border-color:#059669; text-decoration:none; }
+        .barcode-print-btn svg { width:13px; height:13px; stroke-width:2.4; }
         .mp-mobile-card { background: var(--card-bg); border: 1px solid var(--border-soft); border-radius: 14px; box-shadow: 0 8px 20px rgba(15, 23, 42, .06); padding: 10px; }
         .modal-title { font-size: 15px; font-weight: 750; }
         .modal .form-label { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
@@ -148,7 +151,7 @@ if ($businessId <= 0) {
                 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
                     <div>
                         <h1>Stock Inward</h1>
-                        <p>Firm-wise batch stock entry with supplier invoice, barcode, and vendor ledger posting.</p>
+                        <p>Firm-wise stock entry with purchase date, supplier invoice, barcode, and vendor ledger posting.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         <a href="stock-list.php" class="btn btn-outline-primary"><i data-lucide="boxes" style="width:14px;height:14px;"></i> Stock List</a>
@@ -163,7 +166,7 @@ if ($businessId <= 0) {
                 <div class="col-12 col-sm-6 col-xl-3"><article class="mp-stat-card"><div class="mp-stat-icon" style="background:linear-gradient(135deg,#818cf8,#2563eb);"><i data-lucide="package-plus"></i></div><div><div class="mp-stat-label">Total Batches</div><div class="mp-stat-value" id="totalBatches">0</div><div class="mp-stat-sub">Batch-wise inward</div></div></article></div>
                 <div class="col-12 col-sm-6 col-xl-3"><article class="mp-stat-card"><div class="mp-stat-icon" style="background:#dcfce7;color:#15803d;"><i data-lucide="list-checks"></i></div><div><div class="mp-stat-label">Total Items</div><div class="mp-stat-value" id="totalItems">0</div><div class="mp-stat-sub">Line items</div></div></article></div>
                 <div class="col-12 col-sm-6 col-xl-3"><article class="mp-stat-card"><div class="mp-stat-icon" style="background:#fef3c7;color:#b45309;"><i data-lucide="layers"></i></div><div><div class="mp-stat-label">Total Quantity</div><div class="mp-stat-value" id="totalQty">0.00</div><div class="mp-stat-sub">Available stock entries</div></div></article></div>
-                <div class="col-12 col-sm-6 col-xl-3"><article class="mp-stat-card"><div class="mp-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);"><i data-lucide="indian-rupee"></i></div><div><div class="mp-stat-label">Total Stock Value</div><div class="mp-stat-value" id="stockValue">₹0.00</div><div class="mp-stat-sub">Selling value</div></div></article></div>
+                <div class="col-12 col-sm-6 col-xl-3"><article class="mp-stat-card"><div class="mp-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);"><i data-lucide="indian-rupee"></i></div><div><div class="mp-stat-label">Total Purchase Value</div><div class="mp-stat-value" id="stockValue">₹0.00</div><div class="mp-stat-sub">Supplier payable value</div></div></article></div>
             </div>
 
             <section class="mp-card">
@@ -190,7 +193,7 @@ if ($businessId <= 0) {
 
                 <div class="d-none d-md-block table-responsive px-3 pb-3">
                     <table class="table mp-table mb-0">
-                        <thead><tr><th>Batch Number</th><th>Inward Date</th><th>Branch / Firm</th><th>Supplier</th><th>Total Items</th><th>Total Quantity</th><th>Total Value</th><th>Created By</th><th>Status</th><th style="width:210px;">Actions</th></tr></thead>
+                        <thead><tr><th>Batch Number</th><th>Stock Entry Date</th><th>Branch / Firm</th><th>Supplier</th><th>Total Items</th><th>Total Quantity</th><th>Purchase Value</th><th>Created By</th><th>Status</th><th style="width:210px;">Actions</th></tr></thead>
                         <tbody id="stockTableBody"><tr><td colspan="10" class="text-center text-muted py-4">Loading stock inward batches...</td></tr></tbody>
                     </table>
                 </div>
@@ -210,14 +213,14 @@ if ($businessId <= 0) {
             <input type="hidden" name="batch_id" id="batchId" value="0">
             <input type="hidden" name="items_json" id="itemsJson">
             <div class="modal-header">
-                <div><h5 class="modal-title" id="stockModalTitle">Add Stock Inward</h5><div class="mp-sub">Business ID is linked automatically. Batch number and barcodes auto-generate on save.</div></div>
+                <div><h5 class="modal-title" id="stockModalTitle">Add Stock Inward</h5><div class="mp-sub">Business ID is linked automatically. Stock entry date is saved with the batch and linked to every item. Batch number and barcodes auto-generate on save.</div></div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="row g-3 mb-3">
                     <div class="col-12 col-md-3"><label class="form-label">Business ID</label><input type="text" class="form-control" value="<?= (int)$businessId ?>" readonly></div>
                     <div class="col-12 col-md-3"><label class="form-label">Branch / Firm <span class="text-danger">*</span></label><select name="branch_id" id="branchId" class="form-select" required></select></div>
-                    <div class="col-12 col-md-3"><label class="form-label">Inward Date <span class="text-danger">*</span></label><input type="date" name="inward_date" id="inwardDate" class="form-control" max="<?= e($today) ?>" value="<?= e($today) ?>" required></div>
+                    <div class="col-12 col-md-3"><label class="form-label">Stock Entry Date <span class="text-danger">*</span></label><input type="date" name="inward_date" id="inwardDate" class="form-control" max="<?= e($today) ?>" value="<?= e($today) ?>" required></div>
                     <div class="col-12 col-md-3"><label class="form-label">Batch Number</label><input type="text" id="batchNoPreview" class="form-control" value="Auto Generate" readonly></div>
                     <div class="col-12 col-md-3"><label class="form-label">Supplier <span class="text-danger">*</span></label><select name="supplier_id" id="supplierId" class="form-select" required></select></div>
                     <div class="col-12 col-md-3"><label class="form-label">Invoice Number</label><input type="text" name="invoice_number" id="invoiceNumber" class="form-control" maxlength="80" placeholder="Supplier invoice no"></div>
@@ -237,7 +240,7 @@ if ($businessId <= 0) {
                     <div class="col-6 col-lg-3"><div class="stock-summary-box"><span>Purchase Value</span><b id="summaryPurchase">₹0.00</b></div></div>
                     <div class="col-6 col-lg-3"><div class="stock-summary-box"><span>Selling Value</span><b id="summarySelling">₹0.00</b></div></div>
                 </div>
-                <div class="batch-rule mt-3">Batch rule: Same article can be entered multiple times, but every stock inward save creates/updates a separate batch instead of merging with old stock.</div>
+                <div class="batch-rule mt-3">Batch rule: Same article can be entered multiple times. On save, the total purchase value is automatically posted to the selected supplier account.</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
@@ -357,7 +360,7 @@ if ($businessId <= 0) {
         document.getElementById('totalBatches').textContent = parseInt(stats.total_batches || 0, 10);
         document.getElementById('totalItems').textContent = parseInt(stats.total_items || 0, 10);
         document.getElementById('totalQty').textContent = parseFloat(stats.total_qty || 0).toFixed(2);
-        document.getElementById('stockValue').textContent = money.format(parseFloat(stats.selling_total || 0));
+        document.getElementById('stockValue').textContent = money.format(parseFloat(stats.purchase_total || 0));
     }
 
     function renderBatches(batches) {
@@ -370,7 +373,7 @@ if ($businessId <= 0) {
         }
 
         tableBody.innerHTML = batches.map(batch => {
-            const value = money.format(parseFloat(batch.selling_total_value || 0));
+            const value = money.format(parseFloat(batch.purchase_total_value || 0));
             const qty = parseFloat(batch.total_qty || 0).toFixed(2);
             const actions = actionButtons(batch.batch_id, batch.batch_status);
             return `<tr>
@@ -391,15 +394,29 @@ if ($businessId <= 0) {
             <div class="mp-mobile-card">
                 <div class="d-flex justify-content-between gap-2"><div><div class="mp-title">${escapeHtml(batch.batch_no)}</div><div class="mp-sub">${formatDate(batch.inward_date)} · ${escapeHtml(batch.branch_name || '-')}</div></div>${statusBadge(batch.batch_status)}</div>
                 <div class="small text-muted-custom mt-2">Supplier: ${escapeHtml(batch.supplier_name || '-')}</div>
-                <div class="fw-bold mt-2">${parseFloat(batch.total_qty || 0).toFixed(2)} Qty · ${money.format(parseFloat(batch.selling_total_value || 0))}</div>
+                <div class="fw-bold mt-2">${parseFloat(batch.total_qty || 0).toFixed(2)} Qty · ${money.format(parseFloat(batch.purchase_total_value || 0))}</div>
                 <div class="d-flex flex-wrap gap-2 mt-3">${actionButtons(batch.batch_id, batch.batch_status)}</div>
             </div>`).join('');
 
         if (window.lucide) window.lucide.createIcons();
     }
 
+    function barcodePrintButton(item) {
+        const stockItemId = parseInt(item.stock_item_id || 0, 10);
+        const availableQty = Math.max(0, Math.floor(parseFloat(item.available_qty || item.qty || 0)));
+
+        if (!stockItemId || availableQty <= 0) {
+            return '<span class="mp-sub">No stock</span>';
+        }
+
+        const url = 'barcode-print.php?stock_item_id=' + encodeURIComponent(stockItemId) + '&qty=' + encodeURIComponent(availableQty);
+        return '<a href="' + url + '" target="_blank" rel="noopener" class="barcode-print-btn" title="Print barcode labels">' +
+            '<i data-lucide="barcode"></i> Print Barcode</a>';
+    }
+
     function actionButtons(batchId, status) {
         let buttons = '<button type="button" class="btn btn-sm btn-outline-primary mp-action-btn js-view" data-id="' + batchId + '">View</button>';
+        if (permissions.can_print) buttons += '<button type="button" class="barcode-print-btn js-view" data-id="' + batchId + '" title="Open products to print barcodes"><i data-lucide="barcode"></i> Barcode</button>';
         if (permissions.can_edit && status === 'active') buttons += '<button type="button" class="btn btn-sm btn-outline-warning mp-action-btn js-edit" data-id="' + batchId + '">Edit</button>';
         if (permissions.can_print) buttons += '<button type="button" class="btn btn-sm btn-outline-dark mp-action-btn js-print" data-id="' + batchId + '">Print</button>';
         if (permissions.can_delete && status === 'active') buttons += '<button type="button" class="btn btn-sm btn-outline-danger mp-action-btn js-cancel" data-id="' + batchId + '">Cancel</button>';
@@ -583,19 +600,20 @@ if ($businessId <= 0) {
         const data = await apiGet({ action: 'get', batch_id: batchId });
         if (!data.success) { document.getElementById('viewBatchBody').innerHTML = '<div class="text-danger">' + escapeHtml(data.message || 'Unable to load batch.') + '</div>'; return; }
         const b = data.batch;
-        const itemRows = (b.items || []).map(item => `<tr><td>${escapeHtml(item.category_name || '-')}</td><td>${escapeHtml(item.brand_name || '-')}</td><td>${escapeHtml(item.article_no || '-')}</td><td>${escapeHtml(item.article_name || '-')}</td><td>${escapeHtml(item.size || '-')}</td><td>${escapeHtml(item.color || '-')}</td><td>${parseFloat(item.qty || 0).toFixed(2)}</td><td>${money.format(parseFloat(item.purchase_rate || 0))}</td><td>${money.format(parseFloat(item.mrp_rate || 0))}</td><td>${money.format(parseFloat(item.selling_rate || 0))}</td><td>${escapeHtml(item.barcode_value || 'Auto')}</td></tr>`).join('');
+        const itemRows = (b.items || []).map(item => `<tr><td>${escapeHtml(item.category_name || '-')}</td><td>${escapeHtml(item.brand_name || '-')}</td><td>${escapeHtml(item.article_no || '-')}</td><td>${escapeHtml(item.article_name || '-')}</td><td>${escapeHtml(item.size || '-')}</td><td>${escapeHtml(item.color || '-')}</td><td>${parseFloat(item.available_qty || item.qty || 0).toFixed(2)}</td><td>${money.format(parseFloat(item.purchase_rate || 0))}</td><td>${money.format(parseFloat(item.mrp_rate || 0))}</td><td>${money.format(parseFloat(item.selling_rate || 0))}</td><td>${escapeHtml(item.barcode_value || 'Auto')}</td><td>${barcodePrintButton(item)}</td></tr>`).join('');
         document.getElementById('viewBatchBody').innerHTML = `
             <div class="detail-grid mb-3">
                 <div class="detail-box"><div class="detail-label">Batch Number</div><div class="detail-value">${escapeHtml(b.batch_no)}</div></div>
-                <div class="detail-box"><div class="detail-label">Inward Date</div><div class="detail-value">${formatDate(b.inward_date)}</div></div>
+                <div class="detail-box"><div class="detail-label">Stock Entry Date</div><div class="detail-value">${formatDate(b.inward_date)}</div></div>
                 <div class="detail-box"><div class="detail-label">Branch Details</div><div class="detail-value">${escapeHtml(b.branch_name || '-')}</div></div>
                 <div class="detail-box"><div class="detail-label">Supplier Details</div><div class="detail-value">${escapeHtml(b.supplier_name || '-')}</div><div class="mp-sub">${escapeHtml(b.supplier_mobile || '')} ${escapeHtml(b.supplier_gstin || '')}</div></div>
                 <div class="detail-box"><div class="detail-label">Invoice</div><div class="detail-value">${escapeHtml(b.invoice_number || '-')}</div><div class="mp-sub">${formatDate(b.invoice_date)}</div></div>
                 <div class="detail-box"><div class="detail-label">Total Quantity</div><div class="detail-value">${parseFloat(b.total_qty || 0).toFixed(2)}</div></div>
-                <div class="detail-box"><div class="detail-label">Total Value</div><div class="detail-value">${money.format(parseFloat(b.selling_total_value || 0))}</div></div>
+                <div class="detail-box"><div class="detail-label">Purchase Value</div><div class="detail-value">${money.format(parseFloat(b.purchase_total_value || 0))}</div></div>
                 <div class="detail-box"><div class="detail-label">Created By</div><div class="detail-value">${escapeHtml(b.created_by_name || '-')}</div></div>
             </div>
-            <div class="table-responsive"><table class="table mp-table"><thead><tr><th>Category</th><th>Brand</th><th>Article No</th><th>Article Name</th><th>Size</th><th>Color</th><th>Qty</th><th>Purchase</th><th>MRP</th><th>Selling</th><th>Barcode</th></tr></thead><tbody>${itemRows}</tbody></table></div>`;
+            <div class="table-responsive"><table class="table mp-table"><thead><tr><th>Category</th><th>Brand</th><th>Article No</th><th>Article Name</th><th>Size</th><th>Color</th><th>Available Qty</th><th>Purchase</th><th>MRP</th><th>Selling</th><th>Barcode</th><th>Action</th></tr></thead><tbody>${itemRows}</tbody></table></div>`;
+        if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
     }
 
     async function changeStatus(batchId, action, message) {

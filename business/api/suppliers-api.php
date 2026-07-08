@@ -1,576 +1,819 @@
 <?php
+/**
+ * Universal Footwear POS - Suppliers API
+ * Supplier master and detail ledger use the same calculation as Supplier Ledger Report.
+ */
+
+declare(strict_types=1);
+
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/permissions.php';
 require_once __DIR__ . '/../includes/csrf.php';
 
-require_business_login();
-require_page_access($conn, 'suppliers.php');
-
-header('Content-Type: application/json; charset=utf-8');
-
-$businessId = (int) current_business_id();
-
-if ($businessId <= 0) {
-    supplier_api_response(false, 'Business session missing. Please login again.', [], 401);
+if (function_exists('require_business_login')) {
+    require_business_login();
 }
 
-function supplier_api_response(bool $success, string $message = '', array $data = [], int $statusCode = 200): void
+function supplier_json(array $payload, int $statusCode = 200): void
 {
     http_response_code($statusCode);
-    echo json_encode(array_merge([
-        'success' => $success,
-        'message' => $message,
-    ], $data), JSON_UNESCAPED_UNICODE);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-function supplier_api_post_csrf_check(): void
+function supplier_user_id(): int
 {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        return;
+    if (function_exists('current_user_id')) {
+        return (int) current_user_id();
     }
 
-    if (function_exists('verify_csrf')) {
-        verify_csrf();
-        return;
-    }
-
-    if (function_exists('csrf_verify')) {
-        csrf_verify();
-        return;
-    }
-
-    if (function_exists('check_csrf')) {
-        check_csrf();
-        return;
-    }
+    return (int)($_SESSION['user_id'] ?? $_SESSION['business_user_id'] ?? $_SESSION['id'] ?? 0);
 }
 
-function supplier_api_bind(mysqli_stmt $stmt, string $types, array $params): void
+function supplier_business_id(): int
 {
-    $bind = [];
-    $bind[] = $types;
-
-    foreach ($params as $key => $value) {
-        $bind[] = &$params[$key];
+    if (function_exists('current_business_id')) {
+        return (int) current_business_id();
     }
 
-    call_user_func_array([$stmt, 'bind_param'], $bind);
+    return (int)($_SESSION['business_id'] ?? 0);
 }
 
-function supplier_api_table_exists(mysqli $conn, string $table): bool
+function supplier_table_exists(mysqli $conn, string $table): bool
 {
     if (function_exists('table_exists')) {
-        return table_exists($conn, $table);
+        return (bool) table_exists($conn, $table);
+    }
+
+    $table = mysqli_real_escape_string($conn, $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '{$table}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+function supplier_column_exists(mysqli $conn, string $table, string $column): bool
+{
+    if (function_exists('table_has_column')) {
+        return (bool) table_has_column($conn, $table, $column);
     }
 
     $stmt = mysqli_prepare($conn, "
         SELECT COUNT(*) AS total
-        FROM INFORMATION_SCHEMA.TABLES
+        FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
           AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
     ");
-    mysqli_stmt_bind_param($stmt, 's', $table);
+    mysqli_stmt_bind_param($stmt, 'ss', $table, $column);
     mysqli_stmt_execute($stmt);
     $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
     mysqli_stmt_close($stmt);
 
-    return ((int)($row['total'] ?? 0)) > 0;
+    return (int)($row['total'] ?? 0) > 0;
 }
 
-function supplier_api_log(mysqli $conn, int $businessId, string $actionType, int $recordId, $oldValue = null, $newValue = null): void
+function supplier_bind(mysqli_stmt $stmt, string $types, array $params): void
 {
-    $userId = function_exists('current_user_id') ? (int) current_user_id() : (int)($_SESSION['user_id'] ?? 0);
-    $roleId = function_exists('current_role_id') ? (int) current_role_id() : (int)($_SESSION['role_id'] ?? 0);
-    $branchId = function_exists('current_branch_id') ? (int) current_branch_id() : null;
-    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
-    $deviceDetails = $_SERVER['HTTP_USER_AGENT'] ?? null;
-    $oldJson = $oldValue !== null ? json_encode($oldValue, JSON_UNESCAPED_UNICODE) : null;
-    $newJson = $newValue !== null ? json_encode($newValue, JSON_UNESCAPED_UNICODE) : null;
-
-    $logTable = null;
-
-    if (supplier_api_table_exists($conn, 'business_activity_logs')) {
-        $logTable = 'business_activity_logs';
-    } elseif (supplier_api_table_exists($conn, 'activity_logs')) {
-        $logTable = 'activity_logs';
-    }
-
-    if ($logTable === null) {
+    if ($types === '' || !$params) {
         return;
     }
 
-    $sql = "
-        INSERT INTO {$logTable}
-            (business_id, branch_id, user_id, role_id, module_name, action_type, record_id, old_value, new_value, ip_address, device_details, created_at)
-        VALUES
-            (?, ?, ?, ?, 'Suppliers', ?, ?, ?, ?, ?, ?, NOW())
-    ";
+    $refs = [$stmt, $types];
+    foreach ($params as $key => $value) {
+        $refs[] = &$params[$key];
+    }
 
-    $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param(
-        $stmt,
-        'iiiisissss',
-        $businessId,
-        $branchId,
-        $userId,
-        $roleId,
-        $actionType,
-        $recordId,
-        $oldJson,
-        $newJson,
-        $ipAddress,
-        $deviceDetails
-    );
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
+    call_user_func_array('mysqli_stmt_bind_param', $refs);
 }
 
-function supplier_api_validate(array $input): array
+function supplier_rows(mysqli $conn, string $sql, string $types = '', array $params = []): array
 {
-    $supplierName = trim($input['supplier_name'] ?? '');
-    $mobile = trim($input['mobile'] ?? '');
-    $email = trim($input['email'] ?? '');
-    $gstin = strtoupper(trim($input['gstin'] ?? ''));
-    $address = trim($input['address'] ?? '');
-    $openingOutstanding = (float)($input['opening_outstanding'] ?? 0);
+    $stmt = mysqli_prepare($conn, $sql);
 
-    if ($supplierName === '') {
-        supplier_api_response(false, 'Supplier name is required.', [], 422);
+    if (!$stmt) {
+        throw new RuntimeException('SQL prepare failed: ' . mysqli_error($conn));
     }
 
-    if (mb_strlen($supplierName) > 200) {
-        supplier_api_response(false, 'Supplier name should not exceed 200 characters.', [], 422);
+    supplier_bind($stmt, $types, $params);
+
+    if (!mysqli_stmt_execute($stmt)) {
+        $error = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new RuntimeException('SQL execute failed: ' . $error);
     }
 
-    /*
-     * Mobile validation:
-     * - Optional field.
-     * - If entered, allow exactly 10 digits only.
-     * - Do not allow +91, spaces, hyphen, letters, or extra digits.
-     * - Indian mobile numbers should start with 6, 7, 8, or 9.
-     */
-    if ($mobile !== '' && !preg_match('/^[6-9][0-9]{9}$/', $mobile)) {
-        supplier_api_response(false, 'Mobile number must be exactly 10 digits only. Do not enter +91, spaces, hyphen, or extra digits.', [], 422);
+    $res = mysqli_stmt_get_result($stmt);
+    $rows = [];
+
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $rows[] = $row;
+        }
     }
 
-    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        supplier_api_response(false, 'Enter a valid email address.', [], 422);
+    mysqli_stmt_close($stmt);
+
+    return $rows;
+}
+
+function supplier_one(mysqli $conn, string $sql, string $types = '', array $params = []): array
+{
+    $rows = supplier_rows($conn, $sql, $types, $params);
+    return $rows[0] ?? [];
+}
+
+function supplier_permissions(mysqli $conn): array
+{
+    $all = [
+        'can_view' => true,
+        'can_create' => true,
+        'can_edit' => true,
+        'can_delete' => true,
+        'can_print' => true,
+        'can_export' => true,
+    ];
+
+    if (function_exists('is_business_admin') && is_business_admin($conn)) {
+        return $all;
     }
 
-    /*
-     * GSTIN validation:
-     * - Optional field.
-     * - If entered, validate complete Indian GSTIN format.
-     * - Example: 33ABCDE1234F1Z5
-     */
-    if ($gstin !== '' && !preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-        supplier_api_response(false, 'Enter a valid 15-character GSTIN. Example: 33ABCDE1234F1Z5.', [], 422);
+    $businessId = supplier_business_id();
+    $roleId = function_exists('current_role_id') ? (int) current_role_id() : (int)($_SESSION['role_id'] ?? 0);
+
+    if ($businessId <= 0 || $roleId <= 0 || !supplier_table_exists($conn, 'business_sidebar_menus') || !supplier_table_exists($conn, 'business_role_sidebar_access')) {
+        return $all;
     }
 
-    if ($openingOutstanding < 0) {
-        supplier_api_response(false, 'Opening outstanding cannot be negative.', [], 422);
+    $cols = ['can_view'];
+    foreach (['can_create', 'can_edit', 'can_delete', 'can_print', 'can_export'] as $col) {
+        $cols[] = supplier_column_exists($conn, 'business_role_sidebar_access', $col) ? $col : '0 AS ' . $col;
+    }
+
+    $stmt = mysqli_prepare($conn, "
+        SELECT " . implode(', ', $cols) . "
+        FROM business_sidebar_menus sm
+        INNER JOIN business_role_sidebar_access rsa
+            ON rsa.menu_id = sm.id
+           AND rsa.business_id = sm.business_id
+           AND rsa.role_id = ?
+        WHERE sm.business_id = ?
+          AND sm.menu_url = 'suppliers.php'
+          AND sm.is_active = 1
+        LIMIT 1
+    ");
+    mysqli_stmt_bind_param($stmt, 'ii', $roleId, $businessId);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+    mysqli_stmt_close($stmt);
+
+    if (!$row) {
+        return $all;
     }
 
     return [
-        'supplier_name' => $supplierName,
-        'mobile' => $mobile,
-        'email' => $email,
-        'gstin' => $gstin,
-        'address' => $address,
-        'opening_outstanding' => $openingOutstanding,
+        'can_view' => (int)($row['can_view'] ?? 0) === 1,
+        'can_create' => (int)($row['can_create'] ?? 0) === 1,
+        'can_edit' => (int)($row['can_edit'] ?? 0) === 1,
+        'can_delete' => (int)($row['can_delete'] ?? 0) === 1,
+        'can_print' => (int)($row['can_print'] ?? 0) === 1,
+        'can_export' => (int)($row['can_export'] ?? 0) === 1,
     ];
 }
 
-function supplier_api_get_supplier(mysqli $conn, int $businessId, int $supplierId): ?array
+function supplier_ledger_delta(array $row): float
 {
-    $stmt = mysqli_prepare($conn, "
-        SELECT supplier_id, business_id, supplier_name, mobile, email, gstin, address,
-               opening_outstanding, current_outstanding, status, created_at, updated_at
-        FROM suppliers
-        WHERE supplier_id = ?
-          AND business_id = ?
-        LIMIT 1
-    ");
-    mysqli_stmt_bind_param($stmt, 'ii', $supplierId, $businessId);
-    mysqli_stmt_execute($stmt);
-    $supplier = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-    mysqli_stmt_close($stmt);
+    $referenceType = strtolower((string)($row['reference_type'] ?? ''));
+    $purpose = strtolower((string)($row['purpose'] ?? ''));
+    $direction = strtolower((string)($row['transaction_direction'] ?? ''));
+    $debit = round((float)($row['debit'] ?? 0), 2);
+    $credit = round((float)($row['credit'] ?? 0), 2);
 
-    return $supplier ? supplier_api_format_supplier($supplier) : null;
-}
-
-
-function supplier_api_format_supplier(array $supplier): array
-{
-    $supplier['supplier_id'] = (int)($supplier['supplier_id'] ?? 0);
-    $supplier['business_id'] = (int)($supplier['business_id'] ?? 0);
-    $supplier['opening_outstanding'] = (float)($supplier['opening_outstanding'] ?? 0);
-    $supplier['current_outstanding'] = (float)($supplier['current_outstanding'] ?? 0);
-    $supplier['status'] = (int)($supplier['status'] ?? 0);
-
-    return $supplier;
-}
-
-function supplier_api_validate_gstin_value(string $gstin): string
-{
-    $gstin = strtoupper(trim($gstin));
-
-    if ($gstin === '') {
-        supplier_api_response(false, 'GSTIN is required.', [], 422);
+    if ($referenceType === 'opening') {
+        return 0.0;
     }
 
-    if (!preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-        supplier_api_response(false, 'Enter a valid 15-character GSTIN. Example: 33ABCDE1234F1Z5.', [], 422);
+    if (strpos($referenceType, 'cancel') !== false || strpos($referenceType, 'reverse') !== false) {
+        return round(-1 * ($debit + $credit), 2);
     }
 
-    return $gstin;
+    if (strpos($referenceType, 'stock_inward') !== false) {
+        /*
+         * Stock inward purchase must always ADD to supplier payable.
+         * This supports both old rows posted in debit and new rows posted in credit.
+         */
+        return round($debit + $credit, 2);
+    }
+
+    if (in_array($purpose, ['debit', 'advance_payment', 'purchase_return'], true) || $direction === 'debit') {
+        return round(-1 * ($debit + $credit), 2);
+    }
+
+    if ($purpose === 'credit' || $direction === 'credit') {
+        return round($debit + $credit, 2);
+    }
+
+    return round($credit - $debit, 2);
 }
 
-function supplier_api_get_supplier_by_gstin(mysqli $conn, int $businessId, string $gstin, int $excludeSupplierId = 0): ?array
+function supplier_ledger_display_type(array $row): string
 {
-    $gstin = strtoupper(trim($gstin));
+    $referenceType = strtolower((string)($row['reference_type'] ?? ''));
+    $purpose = strtolower((string)($row['purpose'] ?? ''));
+    $direction = strtolower((string)($row['transaction_direction'] ?? ''));
 
-    if ($gstin === '') {
-        return null;
+    if ($referenceType === 'opening') {
+        return 'Opening Balance';
     }
 
-    $sql = "
-        SELECT supplier_id, business_id, supplier_name, mobile, email, gstin, address,
-               opening_outstanding, current_outstanding, status, created_at, updated_at
-        FROM suppliers
+    if (strpos($referenceType, 'cancel') !== false || strpos($referenceType, 'reverse') !== false) {
+        return 'Reversal';
+    }
+
+    if (strpos($referenceType, 'stock_inward') !== false) {
+        return 'Purchase';
+    }
+
+    if ($purpose === 'credit' || $direction === 'credit') {
+        return 'Credit';
+    }
+
+    if ($purpose === 'debit' || $direction === 'debit') {
+        return 'Debit';
+    }
+
+    if ($purpose !== '') {
+        return ucwords(str_replace('_', ' ', $purpose));
+    }
+
+    return ucwords(str_replace('_', ' ', (string)($row['reference_type'] ?? 'Ledger')));
+}
+
+function supplier_calculate_statement(mysqli $conn, int $businessId, array $supplier, string $fromDate = '', string $toDate = ''): array
+{
+    $supplierId = (int)($supplier['supplier_id'] ?? 0);
+    $opening = round((float)($supplier['opening_outstanding'] ?? 0), 2);
+
+    $types = 'ii';
+    $params = [$businessId, $supplierId];
+    $where = "vl.business_id = ? AND vl.supplier_id = ? AND COALESCE(vl.reference_type, '') <> 'opening'";
+
+    if ($fromDate !== '') {
+        $where .= " AND DATE(vl.created_at) >= ?";
+        $types .= 's';
+        $params[] = $fromDate;
+    }
+
+    if ($toDate !== '') {
+        $where .= " AND DATE(vl.created_at) <= ?";
+        $types .= 's';
+        $params[] = $toDate;
+    }
+
+    $rows = supplier_rows($conn, "
+        SELECT
+            vl.vendor_ledger_id,
+            vl.supplier_id,
+            vl.reference_type,
+            vl.reference_id,
+            vl.purpose,
+            vl.transaction_direction,
+            vl.debit,
+            vl.credit,
+            vl.balance AS db_ledger_balance,
+            vl.remarks,
+            vl.created_at,
+            vl.created_at AS entry_datetime,
+            DATE_FORMAT(vl.created_at, '%d-%m-%Y %h:%i %p') AS entry_display,
+            COALESCE(sib.batch_no, CONCAT('#', COALESCE(vl.reference_id, '-'))) AS reference_no,
+            br.branch_name,
+            br.floor_name
+        FROM vendor_ledger vl
+        LEFT JOIN stock_inward_batches sib
+            ON sib.batch_id = vl.reference_id
+           AND sib.business_id = vl.business_id
+           AND vl.reference_type LIKE 'stock_inward%'
+        LEFT JOIN branches br
+            ON br.branch_id = vl.branch_id
+           AND br.business_id = vl.business_id
+        WHERE $where
+        ORDER BY vl.created_at ASC, vl.vendor_ledger_id ASC
+    ", $types, $params);
+
+    $statement = [];
+    $balance = $opening;
+    $additions = 0.0;
+    $decreases = 0.0;
+    $debitTotal = 0.0;
+    $creditTotal = 0.0;
+
+    if (abs($opening) > 0) {
+        $statement[] = [
+            'vendor_ledger_id' => 0,
+            'supplier_id' => $supplierId,
+            'reference_type' => 'opening',
+            'display_type' => 'Opening Balance',
+            'purpose' => 'Opening Balance',
+            'transaction_direction' => 'opening',
+            'reference_no' => '-',
+            'debit' => 0,
+            'credit' => 0,
+            'balance' => $balance,
+            'remarks' => 'Supplier opening balance',
+            'created_at' => '',
+            'entry_datetime' => '',
+            'entry_display' => 'Opening Balance',
+            'branch_name' => '',
+            'floor_name' => '',
+            'is_opening' => 1,
+        ];
+    }
+
+    foreach ($rows as $row) {
+        $debit = round((float)($row['debit'] ?? 0), 2);
+        $credit = round((float)($row['credit'] ?? 0), 2);
+        $delta = supplier_ledger_delta($row);
+
+        if ($delta >= 0) {
+            $additions = round($additions + $delta, 2);
+        } else {
+            $decreases = round($decreases + abs($delta), 2);
+        }
+
+        $debitTotal = round($debitTotal + $debit, 2);
+        $creditTotal = round($creditTotal + $credit, 2);
+        $balance = round($balance + $delta, 2);
+
+        $row['debit'] = $debit;
+        $row['credit'] = $credit;
+        $row['delta_amount'] = $delta;
+        $row['balance'] = $balance;
+        $row['display_type'] = supplier_ledger_display_type($row);
+        $row['is_opening'] = 0;
+
+        $statement[] = $row;
+    }
+
+    return [
+        'rows' => $statement,
+        'summary' => [
+            'opening_balance' => $opening,
+            'total_addition' => round($additions, 2),
+            'total_decrease' => round($decreases, 2),
+            'total_debit' => round($decreases, 2),
+            'total_credit' => round($additions, 2),
+            'raw_debit_total' => round($debitTotal, 2),
+            'raw_credit_total' => round($creditTotal, 2),
+            'closing_balance' => round($balance, 2),
+            'current_balance' => round($balance, 2),
+        ],
+    ];
+}
+
+function supplier_calculate_map(mysqli $conn, int $businessId): array
+{
+    $suppliers = supplier_rows($conn, "SELECT supplier_id, opening_outstanding FROM suppliers WHERE business_id = ?", 'i', [$businessId]);
+    $map = [];
+
+    foreach ($suppliers as $supplier) {
+        $supplierId = (int)$supplier['supplier_id'];
+        $map[$supplierId] = [
+            'opening_balance' => round((float)($supplier['opening_outstanding'] ?? 0), 2),
+            'total_addition' => 0.0,
+            'total_decrease' => 0.0,
+            'calculated_balance' => round((float)($supplier['opening_outstanding'] ?? 0), 2),
+        ];
+    }
+
+    $rows = supplier_rows($conn, "
+        SELECT supplier_id, reference_type, purpose, transaction_direction, debit, credit
+        FROM vendor_ledger
         WHERE business_id = ?
-          AND gstin = ?
-    ";
+          AND COALESCE(reference_type, '') <> 'opening'
+        ORDER BY created_at ASC, vendor_ledger_id ASC
+    ", 'i', [$businessId]);
 
-    $params = [$businessId, $gstin];
+    foreach ($rows as $row) {
+        $supplierId = (int)$row['supplier_id'];
+        if (!isset($map[$supplierId])) {
+            $map[$supplierId] = [
+                'opening_balance' => 0.0,
+                'total_addition' => 0.0,
+                'total_decrease' => 0.0,
+                'calculated_balance' => 0.0,
+            ];
+        }
+
+        $delta = supplier_ledger_delta($row);
+
+        if ($delta >= 0) {
+            $map[$supplierId]['total_addition'] = round($map[$supplierId]['total_addition'] + $delta, 2);
+        } else {
+            $map[$supplierId]['total_decrease'] = round($map[$supplierId]['total_decrease'] + abs($delta), 2);
+        }
+
+        $map[$supplierId]['calculated_balance'] = round($map[$supplierId]['calculated_balance'] + $delta, 2);
+    }
+
+    return $map;
+}
+
+function supplier_refresh_balances(mysqli $conn, int $businessId, int $supplierId): void
+{
+    $supplier = supplier_one($conn, "SELECT * FROM suppliers WHERE business_id = ? AND supplier_id = ? LIMIT 1", 'ii', [$businessId, $supplierId]);
+
+    if (!$supplier) {
+        return;
+    }
+
+    $calculated = supplier_calculate_statement($conn, $businessId, $supplier);
+    $summary = $calculated['summary'];
+    $balance = (float)$summary['closing_balance'];
+    $addition = (float)$summary['total_addition'];
+    $decrease = (float)$summary['total_decrease'];
+
+    mysqli_begin_transaction($conn);
+
+    try {
+        if (supplier_column_exists($conn, 'suppliers', 'current_outstanding')) {
+            $stmt = mysqli_prepare($conn, "UPDATE suppliers SET current_outstanding = ?, updated_at = NOW() WHERE business_id = ? AND supplier_id = ?");
+            mysqli_stmt_bind_param($stmt, 'dii', $balance, $businessId, $supplierId);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        if (supplier_table_exists($conn, 'vendor_outstanding')) {
+            $stmt = mysqli_prepare($conn, "
+                INSERT INTO vendor_outstanding
+                (business_id, supplier_id, total_purchase_amount, total_paid_amount, balance_amount, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    total_purchase_amount = VALUES(total_purchase_amount),
+                    total_paid_amount = VALUES(total_paid_amount),
+                    balance_amount = VALUES(balance_amount),
+                    updated_at = NOW()
+            ");
+            mysqli_stmt_bind_param($stmt, 'iiddd', $businessId, $supplierId, $addition, $decrease, $balance);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        mysqli_commit($conn);
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        throw $e;
+    }
+}
+
+function supplier_name_exists(mysqli $conn, int $businessId, string $supplierName, int $excludeSupplierId = 0): bool
+{
+    $sql = "SELECT COUNT(*) AS total FROM suppliers WHERE business_id = ? AND supplier_name = ?";
     $types = 'is';
+    $params = [$businessId, $supplierName];
 
     if ($excludeSupplierId > 0) {
         $sql .= " AND supplier_id <> ?";
-        $params[] = $excludeSupplierId;
         $types .= 'i';
+        $params[] = $excludeSupplierId;
     }
 
-    $sql .= " ORDER BY status DESC, supplier_id DESC LIMIT 1";
+    $row = supplier_one($conn, $sql, $types, $params);
 
-    $stmt = mysqli_prepare($conn, $sql);
-    supplier_api_bind($stmt, $types, $params);
-    mysqli_stmt_execute($stmt);
-    $supplier = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-    mysqli_stmt_close($stmt);
-
-    return $supplier ? supplier_api_format_supplier($supplier) : null;
+    return (int)($row['total'] ?? 0) > 0;
 }
 
-function supplier_api_supplier_is_used(mysqli $conn, int $businessId, int $supplierId): bool
+function supplier_has_dependency(mysqli $conn, int $businessId, int $supplierId): bool
 {
-    $checks = [
-        ['stock_inward_batches', 'supplier_id'],
-        ['vendor_ledger', 'supplier_id'],
-        ['vendor_outstanding', 'supplier_id'],
-    ];
+    foreach (['stock_inward_batches', 'vendor_ledger', 'vendor_outstanding'] as $table) {
+        if (supplier_table_exists($conn, $table) && supplier_column_exists($conn, $table, 'supplier_id')) {
+            $safe = str_replace('`', '', $table);
+            $row = supplier_one($conn, "SELECT COUNT(*) AS total FROM `{$safe}` WHERE business_id = ? AND supplier_id = ?", 'ii', [$businessId, $supplierId]);
 
-    foreach ($checks as $check) {
-        $table = $check[0];
-        $column = $check[1];
-
-        if (!supplier_api_table_exists($conn, $table)) {
-            continue;
-        }
-
-        $sql = "SELECT COUNT(*) AS total FROM {$table} WHERE business_id = ? AND {$column} = ? LIMIT 1";
-        $stmt = mysqli_prepare($conn, $sql);
-        mysqli_stmt_bind_param($stmt, 'ii', $businessId, $supplierId);
-        mysqli_stmt_execute($stmt);
-        $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-        mysqli_stmt_close($stmt);
-
-        if ((int)($row['total'] ?? 0) > 0) {
-            return true;
+            if ((int)($row['total'] ?? 0) > 0) {
+                return true;
+            }
         }
     }
 
     return false;
 }
 
-$action = $_POST['action'] ?? $_GET['action'] ?? 'list';
-
 try {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        supplier_api_post_csrf_check();
+    $businessId = supplier_business_id();
+    $userId = supplier_user_id();
+
+    if ($businessId <= 0) {
+        supplier_json(['success' => false, 'message' => 'Business session missing. Please login again.'], 401);
     }
 
-    if ($action === 'list') {
-        $search = trim($_GET['search'] ?? '');
-        $statusFilter = $_GET['status'] ?? '';
+    $permissions = supplier_permissions($conn);
 
-        $where = 'WHERE business_id = ?';
-        $params = [$businessId];
-        $types = 'i';
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        $action = (string)($_GET['action'] ?? 'list');
 
-        if ($search !== '') {
-            $where .= ' AND (supplier_name LIKE ? OR mobile LIKE ? OR email LIKE ? OR gstin LIKE ?)';
-            $like = '%' . $search . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $types .= 'ssss';
-        }
+        if ($action === 'list') {
+            if (!$permissions['can_view']) {
+                throw new RuntimeException('You do not have permission to view suppliers.');
+            }
 
-        if ($statusFilter !== '' && ($statusFilter === '0' || $statusFilter === '1')) {
-            $where .= ' AND status = ?';
-            $params[] = (int)$statusFilter;
-            $types .= 'i';
-        }
+            $search = trim((string)($_GET['search'] ?? ''));
+            $status = trim((string)($_GET['status'] ?? ''));
 
-        $stmt = mysqli_prepare($conn, "
-            SELECT supplier_id, business_id, supplier_name, mobile, email, gstin, address,
-                   opening_outstanding, current_outstanding, status, created_at, updated_at
-            FROM suppliers
-            {$where}
-            ORDER BY supplier_id DESC
-        ");
-        supplier_api_bind($stmt, $types, $params);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
+            $types = 'i';
+            $params = [$businessId];
+            $where = 'business_id = ?';
 
-        $suppliers = [];
-        while ($row = mysqli_fetch_assoc($result)) {
-            $row['supplier_id'] = (int)$row['supplier_id'];
-            $row['business_id'] = (int)$row['business_id'];
-            $row['opening_outstanding'] = (float)$row['opening_outstanding'];
-            $row['current_outstanding'] = (float)$row['current_outstanding'];
-            $row['status'] = (int)$row['status'];
-            $suppliers[] = $row;
-        }
-        mysqli_stmt_close($stmt);
+            if ($status !== '') {
+                $where .= ' AND status = ?';
+                $types .= 'i';
+                $params[] = (int)$status;
+            }
 
-        $stmt = mysqli_prepare($conn, "
-            SELECT
-                COUNT(*) AS total_suppliers,
-                SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS active_suppliers,
-                COALESCE(SUM(opening_outstanding), 0) AS opening_total,
-                COALESCE(SUM(current_outstanding), 0) AS current_total
-            FROM suppliers
-            WHERE business_id = ?
-        ");
-        mysqli_stmt_bind_param($stmt, 'i', $businessId);
-        mysqli_stmt_execute($stmt);
-        $stats = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-        mysqli_stmt_close($stmt);
+            if ($search !== '') {
+                $term = '%' . $search . '%';
+                $where .= " AND (supplier_name LIKE ? OR mobile LIKE ? OR email LIKE ? OR gstin LIKE ?)";
+                $types .= 'ssss';
+                array_push($params, $term, $term, $term, $term);
+            }
 
-        supplier_api_response(true, '', [
-            'suppliers' => $suppliers,
-            'stats' => [
-                'total_suppliers' => (int)($stats['total_suppliers'] ?? 0),
-                'active_suppliers' => (int)($stats['active_suppliers'] ?? 0),
-                'opening_total' => (float)($stats['opening_total'] ?? 0),
-                'current_total' => (float)($stats['current_total'] ?? 0),
-            ],
-        ]);
-    }
+            $suppliers = supplier_rows($conn, "SELECT * FROM suppliers WHERE $where ORDER BY supplier_id DESC", $types, $params);
+            $calcMap = supplier_calculate_map($conn, $businessId);
 
-    if ($action === 'gst_lookup' || $action === 'lookup_by_gstin') {
-        $gstin = supplier_api_validate_gstin_value($_GET['gstin'] ?? $_POST['gstin'] ?? '');
-        $supplier = supplier_api_get_supplier_by_gstin($conn, $businessId, $gstin);
+            $stats = [
+                'total_suppliers' => 0,
+                'active_suppliers' => 0,
+                'outstanding_suppliers' => 0,
+                'calculated_balance_total' => 0.0,
+                'current_outstanding_total' => 0.0,
+            ];
 
-        if (!$supplier) {
-            supplier_api_response(true, 'No existing supplier found for this GSTIN.', [
-                'found' => false,
-                'supplier' => null,
+            foreach ($suppliers as &$supplier) {
+                $supplierId = (int)$supplier['supplier_id'];
+                $calc = $calcMap[$supplierId] ?? [
+                    'opening_balance' => (float)($supplier['opening_outstanding'] ?? 0),
+                    'total_addition' => 0,
+                    'total_decrease' => 0,
+                    'calculated_balance' => (float)($supplier['opening_outstanding'] ?? 0),
+                ];
+
+                $supplier['total_addition'] = $calc['total_addition'];
+                $supplier['total_decrease'] = $calc['total_decrease'];
+                $supplier['calculated_balance'] = $calc['calculated_balance'];
+                $supplier['db_current_balance'] = (float)($supplier['current_outstanding'] ?? 0);
+                $supplier['current_outstanding'] = $calc['calculated_balance'];
+
+                $stats['total_suppliers']++;
+                if ((int)($supplier['status'] ?? 0) === 1) {
+                    $stats['active_suppliers']++;
+                }
+                if ((float)$calc['calculated_balance'] > 0) {
+                    $stats['outstanding_suppliers']++;
+                }
+                $stats['calculated_balance_total'] = round($stats['calculated_balance_total'] + (float)$calc['calculated_balance'], 2);
+                $stats['current_outstanding_total'] = $stats['calculated_balance_total'];
+            }
+            unset($supplier);
+
+            supplier_json([
+                'success' => true,
+                'suppliers' => $suppliers,
+                'stats' => $stats,
             ]);
         }
 
-        supplier_api_response(true, 'Supplier details loaded successfully.', [
-            'found' => true,
-            'supplier' => $supplier,
-        ]);
-    }
+        if ($action === 'get') {
+            if (!$permissions['can_view']) {
+                throw new RuntimeException('You do not have permission to view suppliers.');
+            }
 
-    if ($action === 'get') {
-        $supplierId = (int)($_GET['supplier_id'] ?? 0);
+            $supplierId = (int)($_GET['supplier_id'] ?? 0);
 
-        if ($supplierId <= 0) {
-            supplier_api_response(false, 'Invalid supplier selected.', [], 422);
+            if ($supplierId <= 0) {
+                throw new RuntimeException('Invalid supplier selected.');
+            }
+
+            $supplier = supplier_one($conn, "SELECT * FROM suppliers WHERE business_id = ? AND supplier_id = ? LIMIT 1", 'ii', [$businessId, $supplierId]);
+
+            if (!$supplier) {
+                throw new RuntimeException('Supplier not found.');
+            }
+
+            $statement = supplier_calculate_statement($conn, $businessId, $supplier);
+            $supplier['calculated_balance'] = $statement['summary']['closing_balance'];
+            $supplier['db_current_balance'] = (float)($supplier['current_outstanding'] ?? 0);
+            $supplier['current_outstanding'] = $statement['summary']['closing_balance'];
+
+            supplier_json([
+                'success' => true,
+                'supplier' => $supplier,
+                'summary' => $statement['summary'],
+                'ledger' => $statement['rows'],
+            ]);
         }
 
-        $supplier = supplier_api_get_supplier($conn, $businessId, $supplierId);
-
-        if (!$supplier) {
-            supplier_api_response(false, 'Supplier not found.', [], 404);
-        }
-
-        supplier_api_response(true, '', ['supplier' => $supplier]);
+        supplier_json(['success' => false, 'message' => 'Invalid supplier action.'], 400);
     }
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        supplier_json(['success' => false, 'message' => 'Invalid request method.'], 405);
+    }
+
+    if (function_exists('verify_csrf')) {
+        verify_csrf();
+    }
+
+    $action = (string)($_POST['action'] ?? '');
 
     if ($action === 'save_supplier') {
         $supplierId = (int)($_POST['supplier_id'] ?? 0);
-        $data = supplier_api_validate($_POST);
+        $supplierName = trim((string)($_POST['supplier_name'] ?? ''));
+        $mobile = trim((string)($_POST['mobile'] ?? ''));
+        $email = trim((string)($_POST['email'] ?? ''));
+        $gstin = strtoupper(trim((string)($_POST['gstin'] ?? '')));
+        $address = trim((string)($_POST['address'] ?? ''));
+        $opening = max(0, (float)($_POST['opening_outstanding'] ?? 0));
+        $status = (int)($_POST['status'] ?? 1);
 
-        if ($data['gstin'] !== '') {
-            $duplicateSupplier = supplier_api_get_supplier_by_gstin($conn, $businessId, $data['gstin'], $supplierId);
-
-            if ($duplicateSupplier) {
-                supplier_api_response(false, 'GSTIN already exists for this supplier. Existing supplier details are returned for auto-fill.', [
-                    'found' => true,
-                    'supplier' => $duplicateSupplier,
-                ], 409);
-            }
+        if ($supplierName === '') {
+            throw new RuntimeException('Supplier name is required.');
         }
 
         if ($supplierId > 0) {
-            $oldSupplier = supplier_api_get_supplier($conn, $businessId, $supplierId);
-
-            if (!$oldSupplier) {
-                supplier_api_response(false, 'Supplier not found.', [], 404);
+            if (!$permissions['can_edit']) {
+                throw new RuntimeException('You do not have permission to edit suppliers.');
             }
 
-            $oldOpening = (float)$oldSupplier['opening_outstanding'];
-            $oldCurrent = (float)$oldSupplier['current_outstanding'];
-            $difference = $data['opening_outstanding'] - $oldOpening;
-            $newCurrentOutstanding = $oldCurrent + $difference;
-
-            if ($newCurrentOutstanding < 0) {
-                $newCurrentOutstanding = 0;
+            if (supplier_name_exists($conn, $businessId, $supplierName, $supplierId)) {
+                throw new RuntimeException('Supplier name already exists.');
             }
 
             $stmt = mysqli_prepare($conn, "
                 UPDATE suppliers
-                SET supplier_name = ?,
-                    mobile = ?,
-                    email = ?,
-                    gstin = ?,
-                    address = ?,
-                    opening_outstanding = ?,
-                    current_outstanding = ?,
-                    updated_at = NOW()
-                WHERE supplier_id = ?
-                  AND business_id = ?
+                SET supplier_name = ?, mobile = ?, email = ?, gstin = ?, address = ?,
+                    opening_outstanding = ?, status = ?, updated_at = NOW()
+                WHERE business_id = ? AND supplier_id = ?
             ");
-            mysqli_stmt_bind_param(
-                $stmt,
-                'sssssddii',
-                $data['supplier_name'],
-                $data['mobile'],
-                $data['email'],
-                $data['gstin'],
-                $data['address'],
-                $data['opening_outstanding'],
-                $newCurrentOutstanding,
-                $supplierId,
-                $businessId
-            );
+            mysqli_stmt_bind_param($stmt, 'sssssdiii', $supplierName, $mobile, $email, $gstin, $address, $opening, $status, $businessId, $supplierId);
             mysqli_stmt_execute($stmt);
             mysqli_stmt_close($stmt);
 
-            supplier_api_log($conn, $businessId, 'update', $supplierId, $oldSupplier, [
-                'supplier_name' => $data['supplier_name'],
-                'mobile' => $data['mobile'],
-                'email' => $data['email'],
-                'gstin' => $data['gstin'],
-                'address' => $data['address'],
-                'opening_outstanding' => $data['opening_outstanding'],
-                'current_outstanding' => $newCurrentOutstanding,
-            ]);
+            supplier_refresh_balances($conn, $businessId, $supplierId);
+            supplier_json(['success' => true, 'message' => 'Supplier updated successfully.']);
+        }
 
-            supplier_api_response(true, 'Supplier updated successfully.', ['supplier_id' => $supplierId]);
+        if (!$permissions['can_create']) {
+            throw new RuntimeException('You do not have permission to create suppliers.');
+        }
+
+        if (supplier_name_exists($conn, $businessId, $supplierName)) {
+            throw new RuntimeException('Supplier name already exists.');
         }
 
         $stmt = mysqli_prepare($conn, "
             INSERT INTO suppliers
-                (business_id, supplier_name, mobile, email, gstin, address, opening_outstanding, current_outstanding, status, created_at)
-            VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+            (business_id, supplier_name, mobile, email, gstin, address, opening_outstanding, current_outstanding, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        mysqli_stmt_bind_param(
-            $stmt,
-            'isssssdd',
-            $businessId,
-            $data['supplier_name'],
-            $data['mobile'],
-            $data['email'],
-            $data['gstin'],
-            $data['address'],
-            $data['opening_outstanding'],
-            $data['opening_outstanding']
-        );
+        mysqli_stmt_bind_param($stmt, 'isssssddi', $businessId, $supplierName, $mobile, $email, $gstin, $address, $opening, $opening, $status);
         mysqli_stmt_execute($stmt);
-        $newSupplierId = (int) mysqli_insert_id($conn);
+        $newId = (int)mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
-        supplier_api_log($conn, $businessId, 'create', $newSupplierId, null, $data);
+        supplier_refresh_balances($conn, $businessId, $newId);
+        supplier_json(['success' => true, 'message' => 'Supplier created successfully.']);
+    }
 
-        supplier_api_response(true, 'Supplier created successfully.', ['supplier_id' => $newSupplierId]);
+    if ($action === 'save_transaction') {
+        if (!$permissions['can_create']) {
+            throw new RuntimeException('You do not have permission to add supplier transactions.');
+        }
+
+        $supplierId = (int)($_POST['supplier_id'] ?? 0);
+        $branchId = !empty($_POST['branch_id']) ? (int)$_POST['branch_id'] : null;
+        $purpose = strtolower(trim((string)($_POST['purpose'] ?? '')));
+        $otherDirection = strtolower(trim((string)($_POST['other_direction'] ?? '')));
+        $amount = round((float)($_POST['amount'] ?? 0), 2);
+        $referenceType = trim((string)($_POST['reference_type'] ?? 'supplier_transaction')) ?: 'supplier_transaction';
+        $referenceNo = trim((string)($_POST['reference_no'] ?? ''));
+        $remarks = trim((string)($_POST['remarks'] ?? ''));
+
+        if ($supplierId <= 0) {
+            throw new RuntimeException('Please select supplier.');
+        }
+
+        if ($amount <= 0) {
+            throw new RuntimeException('Enter valid transaction amount.');
+        }
+
+        $supplier = supplier_one($conn, "SELECT * FROM suppliers WHERE business_id = ? AND supplier_id = ? LIMIT 1", 'ii', [$businessId, $supplierId]);
+
+        if (!$supplier) {
+            throw new RuntimeException('Supplier not found.');
+        }
+
+        $direction = 'debit';
+        $debit = 0.00;
+        $credit = 0.00;
+
+        if ($purpose === 'credit') {
+            $direction = 'credit';
+            $credit = $amount;
+        } elseif ($purpose === 'other') {
+            $direction = $otherDirection === 'credit' ? 'credit' : 'debit';
+            if ($direction === 'credit') {
+                $credit = $amount;
+            } else {
+                $debit = $amount;
+            }
+        } else {
+            $direction = 'debit';
+            $debit = $amount;
+        }
+
+        $current = supplier_calculate_statement($conn, $businessId, $supplier);
+        $baseBalance = (float)$current['summary']['closing_balance'];
+        $delta = supplier_ledger_delta([
+            'reference_type' => $referenceType,
+            'purpose' => $purpose,
+            'transaction_direction' => $direction,
+            'debit' => $debit,
+            'credit' => $credit,
+        ]);
+        $newBalance = round($baseBalance + $delta, 2);
+        $finalRemarks = $remarks !== '' ? $remarks : ('Purpose: ' . ucwords(str_replace('_', ' ', $purpose)) . ' | ' . ($direction === 'credit' ? 'Amount added' : 'Amount decreased'));
+
+        $stmt = mysqli_prepare($conn, "
+            INSERT INTO vendor_ledger
+            (business_id, branch_id, supplier_id, reference_type, reference_id, purpose, transaction_direction,
+             debit, credit, balance, remarks, created_by)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        mysqli_stmt_bind_param($stmt, 'iiisssdddsi', $businessId, $branchId, $supplierId, $referenceType, $purpose, $direction, $debit, $credit, $newBalance, $finalRemarks, $userId);
+        mysqli_stmt_execute($stmt);
+        $ledgerId = (int)mysqli_insert_id($conn);
+        mysqli_stmt_close($stmt);
+
+        supplier_refresh_balances($conn, $businessId, $supplierId);
+
+        if (function_exists('log_activity')) {
+            try {
+                log_activity($conn, 'Suppliers', 'transaction', $supplierId, null, [
+                    'ledger_id' => $ledgerId,
+                    'purpose' => $purpose,
+                    'amount' => $amount,
+                    'balance' => $newBalance,
+                ]);
+            } catch (Throwable $ignored) {}
+        }
+
+        supplier_json(['success' => true, 'message' => 'Supplier transaction saved successfully.']);
     }
 
     if ($action === 'toggle_status') {
+        if (!$permissions['can_edit']) {
+            throw new RuntimeException('You do not have permission to change supplier status.');
+        }
+
         $supplierId = (int)($_POST['supplier_id'] ?? 0);
 
         if ($supplierId <= 0) {
-            supplier_api_response(false, 'Invalid supplier selected.', [], 422);
+            throw new RuntimeException('Invalid supplier selected.');
         }
 
-        $oldSupplier = supplier_api_get_supplier($conn, $businessId, $supplierId);
-
-        if (!$oldSupplier) {
-            supplier_api_response(false, 'Supplier not found.', [], 404);
-        }
-
-        $newStatus = ((int)$oldSupplier['status'] === 1) ? 0 : 1;
-
-        $stmt = mysqli_prepare($conn, "
-            UPDATE suppliers
-            SET status = ?,
-                updated_at = NOW()
-            WHERE supplier_id = ?
-              AND business_id = ?
-        ");
-        mysqli_stmt_bind_param($stmt, 'iii', $newStatus, $supplierId, $businessId);
+        $stmt = mysqli_prepare($conn, "UPDATE suppliers SET status = IF(status = 1, 0, 1), updated_at = NOW() WHERE business_id = ? AND supplier_id = ?");
+        mysqli_stmt_bind_param($stmt, 'ii', $businessId, $supplierId);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
-        supplier_api_log($conn, $businessId, 'status_update', $supplierId, $oldSupplier, ['status' => $newStatus]);
-
-        supplier_api_response(true, 'Supplier status updated successfully.', ['status' => $newStatus]);
+        supplier_json(['success' => true, 'message' => 'Supplier status updated successfully.']);
     }
 
     if ($action === 'delete_supplier') {
+        if (!$permissions['can_delete']) {
+            throw new RuntimeException('You do not have permission to delete suppliers.');
+        }
+
         $supplierId = (int)($_POST['supplier_id'] ?? 0);
 
         if ($supplierId <= 0) {
-            supplier_api_response(false, 'Invalid supplier selected.', [], 422);
+            throw new RuntimeException('Invalid supplier selected.');
         }
 
-        $oldSupplier = supplier_api_get_supplier($conn, $businessId, $supplierId);
-
-        if (!$oldSupplier) {
-            supplier_api_response(false, 'Supplier not found.', [], 404);
+        if (supplier_has_dependency($conn, $businessId, $supplierId)) {
+            throw new RuntimeException('This supplier is already used in stock/ledger. Deactivate it instead of deleting.');
         }
 
-        if (supplier_api_supplier_is_used($conn, $businessId, $supplierId)) {
-            supplier_api_response(false, 'This supplier is already used in stock/ledger. Please deactivate instead of deleting.', [], 409);
-        }
-
-        $stmt = mysqli_prepare($conn, "
-            DELETE FROM suppliers
-            WHERE supplier_id = ?
-              AND business_id = ?
-            LIMIT 1
-        ");
-        mysqli_stmt_bind_param($stmt, 'ii', $supplierId, $businessId);
+        $stmt = mysqli_prepare($conn, "DELETE FROM suppliers WHERE business_id = ? AND supplier_id = ?");
+        mysqli_stmt_bind_param($stmt, 'ii', $businessId, $supplierId);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
-        supplier_api_log($conn, $businessId, 'delete', $supplierId, $oldSupplier, null);
-
-        supplier_api_response(true, 'Supplier deleted successfully.');
+        supplier_json(['success' => true, 'message' => 'Supplier deleted successfully.']);
     }
 
-    supplier_api_response(false, 'Invalid API action.', [], 400);
+    supplier_json(['success' => false, 'message' => 'Invalid supplier action.'], 400);
 } catch (Throwable $e) {
-    supplier_api_response(false, 'Server error: ' . $e->getMessage(), [], 500);
+    supplier_json(['success' => false, 'message' => $e->getMessage()], 500);
 }
+?>

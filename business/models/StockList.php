@@ -531,19 +531,121 @@ class StockList
         return $this->getStockItem($businessId, (int)$row['stock_item_id']);
     }
 
+    private function userDisplayNameSql(string $alias = 'u'): string
+    {
+        if (!$this->tableExists('users')) {
+            return "'System'";
+        }
+
+        $parts = [];
+        foreach (['full_name', 'name', 'username', 'email'] as $column) {
+            if ($this->columnExists('users', $column)) {
+                $parts[] = "NULLIF({$alias}.`{$column}`, '')";
+            }
+        }
+
+        if (!$parts) {
+            return "'System'";
+        }
+
+        return 'COALESCE(' . implode(', ', $parts) . ", 'System')";
+    }
+
+    private function movementDisplayLabel($type): string
+    {
+        $key = strtolower(trim((string)$type));
+
+        $labels = [
+            'inward' => 'Stock Inward',
+            'stock_inward' => 'Stock Inward',
+            'reference' => 'Stock Inward',
+            'purchase' => 'Purchase Stock',
+            'purchase_inward' => 'Purchase Stock',
+            'opening' => 'Opening Stock',
+            'opening_stock' => 'Opening Stock',
+            'sale' => 'Sale',
+            'sales' => 'Sale',
+            'bill' => 'Sale Bill',
+            'sales_return' => 'Sales Return',
+            'return' => 'Return',
+            'adjustment' => 'Stock Adjustment',
+            'stock_adjustment' => 'Stock Adjustment',
+            'transfer' => 'Stock Transfer',
+            'cancelled' => 'Cancelled',
+        ];
+
+        if (isset($labels[$key])) {
+            return $labels[$key];
+        }
+
+        if ($key === '') {
+            return '-';
+        }
+
+        return ucwords(str_replace('_', ' ', $key));
+    }
+
+    private function normalizeMovementRow(array $row): array
+    {
+        $movementType = strtolower(trim((string)($row['movement_type'] ?? '')));
+        $referenceType = strtolower(trim((string)($row['reference_type'] ?? '')));
+
+        /*
+         * Old inward rows were saved as "reference".
+         * Keep the database value untouched, but return a POS-friendly value
+         * so View modal/list screens do not show newly added stock as Reference.
+         */
+        if ($movementType === 'reference') {
+            $row['movement_type'] = 'stock_inward';
+        }
+
+        if ($referenceType === 'reference') {
+            $row['reference_type'] = 'stock_inward';
+        }
+
+        $row['movement_type_label'] = $this->movementDisplayLabel($row['movement_type'] ?? $movementType);
+        $row['reference_type_label'] = $this->movementDisplayLabel($row['reference_type'] ?? $referenceType);
+
+        if (!isset($row['created_by_name']) || trim((string)$row['created_by_name']) === '') {
+            $row['created_by_name'] = 'System';
+        }
+
+        return $row;
+    }
+
     public function movements(int $businessId, int $stockItemId): array
     {
         if (!$this->tableExists('stock_movements')) {
             return [];
         }
 
+        $userSelect = "'System'";
+        $userJoin = '';
+
+        if (
+            $this->tableExists('users')
+            && $this->columnExists('users', 'user_id')
+            && $this->columnExists('stock_movements', 'created_by')
+        ) {
+            $userSelect = $this->userDisplayNameSql('u');
+            $userJoin = "LEFT JOIN users u ON u.user_id = sm.created_by";
+
+            if ($this->columnExists('users', 'business_id') && $this->columnExists('stock_movements', 'business_id')) {
+                $userJoin .= " AND u.business_id = sm.business_id";
+            }
+        }
+
+        $orderBy = $this->columnExists('stock_movements', 'movement_id')
+            ? 'sm.movement_id'
+            : ($this->columnExists('stock_movements', 'created_at') ? 'sm.created_at' : 'sm.stock_item_id');
+
         $stmt = mysqli_prepare($this->conn, "
-            SELECT sm.*, u.full_name AS created_by_name
+            SELECT sm.*, {$userSelect} AS created_by_name
             FROM stock_movements sm
-            LEFT JOIN users u ON u.user_id = sm.created_by AND u.business_id = sm.business_id
+            {$userJoin}
             WHERE sm.business_id = ?
               AND sm.stock_item_id = ?
-            ORDER BY sm.movement_id DESC
+            ORDER BY {$orderBy} DESC
             LIMIT 100
         ");
         mysqli_stmt_bind_param($stmt, 'ii', $businessId, $stockItemId);
@@ -551,7 +653,7 @@ class StockList
         $rs = mysqli_stmt_get_result($stmt);
         $rows = [];
         while ($row = mysqli_fetch_assoc($rs)) {
-            $rows[] = $row;
+            $rows[] = $this->normalizeMovementRow($row);
         }
         mysqli_stmt_close($stmt);
 

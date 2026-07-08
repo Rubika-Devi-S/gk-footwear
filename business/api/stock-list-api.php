@@ -21,10 +21,10 @@ function stock_list_json(array $payload, int $statusCode = 200): void
 function stock_list_current_user_id(): int
 {
     if (function_exists('current_user_id')) {
-        return (int)current_user_id();
+        return (int) current_user_id();
     }
 
-    return (int)($_SESSION['user_id'] ?? 0);
+    return (int) ($_SESSION['user_id'] ?? 0);
 }
 
 function stock_list_verify_csrf(): void
@@ -49,13 +49,16 @@ try {
     require_business_login();
     require_page_access($conn, 'stock-list.php');
 
-    $businessId = (int)current_business_id();
+    $businessId = (int) current_business_id();
     if ($businessId <= 0) {
-        stock_list_json(['success' => false, 'message' => 'Business session missing. Please login again.'], 401);
+        stock_list_json([
+            'success' => false,
+            'message' => 'Business session missing. Please login again.',
+        ], 401);
     }
 
     $userId = stock_list_current_user_id();
-    $isAdmin = function_exists('is_business_admin') ? (bool)is_business_admin($conn) : true;
+    $isAdmin = function_exists('is_business_admin') ? (bool) is_business_admin($conn) : true;
     $controller = new StockListController($conn, $businessId, $userId, $isAdmin);
 
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -65,23 +68,26 @@ try {
         stock_list_verify_csrf();
     }
 
-    if ($action === 'init') {
-        stock_list_json($controller->init($_GET));
-    }
+    switch ($action) {
+        case 'init':
+            stock_list_json($controller->init($_GET));
+            break;
 
-    if ($action === 'list') {
-        stock_list_json($controller->list($_GET));
-    }
+        case 'list':
+            stock_list_json($controller->list($_GET));
+            break;
 
-    if ($action === 'get') {
-        stock_list_json($controller->get((int)($_GET['stock_item_id'] ?? 0)));
-    }
+        case 'get':
+            stock_list_json($controller->get((int) ($_GET['stock_item_id'] ?? 0)));
+            break;
 
-    if ($action === 'barcode_lookup') {
-        stock_list_json($controller->barcodeLookup((int)($_GET['branch_id'] ?? 0), (string)($_GET['barcode'] ?? '')));
-    }
+        case 'barcode_lookup':
+            stock_list_json($controller->barcodeLookup((int) ($_GET['branch_id'] ?? 0), (string) ($_GET['barcode'] ?? '')));
+            break;
 
-    stock_list_json(['success' => false, 'message' => 'Invalid stock list API action.'], 400);
+        default:
+            stock_list_json(['success' => false, 'message' => 'Invalid stock list API action.'], 400);
+    }
 } catch (Throwable $e) {
     stock_list_json([
         'success' => false,
