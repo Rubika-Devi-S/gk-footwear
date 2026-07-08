@@ -277,6 +277,31 @@ if ($businessId <= 0) {
         padding: 10px;
     }
 
+
+    .live-refresh-pill {
+        pointer-events: none;
+        opacity: .95;
+        border-style: dashed;
+        font-size: 11px !important;
+        min-width: 142px;
+        justify-content: center;
+    }
+    .live-refresh-pill.is-syncing {
+        color: #0369a1 !important;
+        border-color: #7dd3fc !important;
+        background: #e0f2fe !important;
+    }
+    .live-refresh-pill.is-ok {
+        color: #15803d !important;
+        border-color: #86efac !important;
+        background: #dcfce7 !important;
+    }
+    .live-refresh-pill.is-error {
+        color: #b91c1c !important;
+        border-color: #fecaca !important;
+        background: #fee2e2 !important;
+    }
+
     @media (max-width: 991px) {
         .stock-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -319,6 +344,10 @@ if ($businessId <= 0) {
                         <button type="button" id="resetStockPage" class="btn btn-outline-primary">
                             <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
                             Reset
+                        </button>
+                        <button type="button" id="stockLiveStatus" class="btn btn-outline-success live-refresh-pill" disabled>
+                            <i data-lucide="radio" style="width:14px;height:14px;"></i>
+                            Live: Starting
                         </button>
                     </div>
                 </div>
@@ -501,6 +530,10 @@ if ($businessId <= 0) {
     let searchTimer = null;
     let currentPage = 1;
     let totalPages = 1;
+    let stockLoading = false;
+    let autoRefreshTimer = null;
+    const autoRefreshMs = 10000;
+    const liveStatus = document.getElementById('stockLiveStatus');
 
     const money = new Intl.NumberFormat('en-IN', {
         style: 'currency',
@@ -527,10 +560,41 @@ if ($businessId <= 0) {
     }
 
     function apiGet(params) {
-        const query = new URLSearchParams(params);
+        const requestParams = Object.assign({}, params || {}, { _live_ts: Date.now() });
+        const query = new URLSearchParams(requestParams);
         return fetch(apiUrl + '?' + query.toString(), {
-            headers: { 'Accept': 'application/json' }
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            }
         }).then(function (response) { return response.json(); });
+    }
+
+    function setLiveStatus(state, message) {
+        if (!liveStatus) return;
+        liveStatus.classList.remove('is-syncing', 'is-ok', 'is-error');
+        liveStatus.classList.add(state === 'error' ? 'is-error' : (state === 'syncing' ? 'is-syncing' : 'is-ok'));
+        liveStatus.innerHTML = '<i data-lucide="' + (state === 'error' ? 'wifi-off' : (state === 'syncing' ? 'refresh-cw' : 'radio')) + '" style="width:14px;height:14px;"></i> ' + escapeHtml(message);
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    function liveTimeText() {
+        const now = new Date();
+        return now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function startAutoRefresh() {
+        if (autoRefreshTimer) {
+            window.clearInterval(autoRefreshTimer);
+        }
+
+        autoRefreshTimer = window.setInterval(function () {
+            if (document.hidden) return;
+            if (detailModalEl && detailModalEl.classList.contains('show')) return;
+            loadStock(true);
+        }, autoRefreshMs);
     }
 
     function fillSelect(id, rows, valueKey, labelCallback, emptyText) {
@@ -687,22 +751,40 @@ if ($businessId <= 0) {
         document.getElementById('nextPage').disabled = currentPage >= totalPages;
     }
 
-    async function loadStock() {
-        tableBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Loading stock...</td></tr>';
-        mobileCards.innerHTML = '<div class="mp-mobile-card text-center text-muted">Loading stock...</div>';
+    async function loadStock(silent) {
+        silent = Boolean(silent);
+        if (stockLoading) return;
+        stockLoading = true;
+
+        if (!silent) {
+            tableBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Loading stock...</td></tr>';
+            mobileCards.innerHTML = '<div class="mp-mobile-card text-center text-muted">Loading stock...</div>';
+        }
+
+        setLiveStatus('syncing', silent ? 'Live: Checking' : 'Loading');
 
         try {
             const data = await apiGet(filterParams());
             if (!data.success) {
-                showMessage('error', data.message || 'Unable to load stock list.');
+                if (!silent) {
+                    showMessage('error', data.message || 'Unable to load stock list.');
+                }
+                setLiveStatus('error', 'Live: API Error');
                 return;
             }
+
             renderStats(data.stats || {});
             renderStock((data.stock && data.stock.items) ? data.stock.items : []);
             setPagination((data.stock && data.stock.pagination) ? data.stock.pagination : {});
+            setLiveStatus('ok', 'Live: ' + liveTimeText());
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
-            showMessage('error', 'Unable to connect to stock list API.');
+            if (!silent) {
+                showMessage('error', 'Unable to connect to stock list API.');
+            }
+            setLiveStatus('error', 'Live: Offline');
+        } finally {
+            stockLoading = false;
         }
     }
 
@@ -724,6 +806,8 @@ if ($businessId <= 0) {
             renderStats(data.stats || {});
             renderStock((data.stock && data.stock.items) ? data.stock.items : []);
             setPagination((data.stock && data.stock.pagination) ? data.stock.pagination : {});
+            setLiveStatus('ok', 'Live: ' + liveTimeText());
+            startAutoRefresh();
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
             showMessage('error', 'Unable to initialize stock list page.');
@@ -749,6 +833,45 @@ if ($businessId <= 0) {
         return '<div class="stock-detail-box"><div class="mp-stat-label">' + escapeHtml(label) + '</div><div class="mp-title mt-1">' + value + '</div></div>';
     }
 
+    function movementTypeLabel(type) {
+        const key = String(type || '').toLowerCase().trim();
+        const labels = {
+            inward: 'Stock Inward',
+            stock_inward: 'Stock Inward',
+            reference: 'Stock Entry',
+            purchase: 'Purchase Stock',
+            purchase_inward: 'Purchase Stock',
+            opening: 'Opening Stock',
+            opening_stock: 'Opening Stock',
+            sale: 'Sale',
+            sales: 'Sale',
+            bill: 'Sale Bill',
+            sales_return: 'Sales Return',
+            return: 'Return',
+            adjustment: 'Adjustment',
+            stock_adjustment: 'Stock Adjustment',
+            transfer: 'Stock Transfer',
+            cancelled: 'Cancelled'
+        };
+        return labels[key] || (type ? String(type).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : '-');
+    }
+
+    function movementSource(m) {
+        const refType = String(m.reference_type || '').toLowerCase().trim();
+        const refNo = m.reference_no || m.inward_no || m.invoice_no || m.bill_no || m.batch_no || '';
+        const refId = m.reference_id || '';
+
+        let source = movementTypeLabel(refType || m.movement_type || '');
+        if (!source || source === '-') source = 'Stock Entry';
+
+        const referenceText = refNo ? escapeHtml(refNo) : (refId ? '#' + escapeHtml(refId) : '');
+        const userName = m.created_by_name || m.user_name || m.created_by || '';
+
+        return '<div class="fw-bold">' + escapeHtml(source) + '</div>' +
+            (referenceText ? '<div class="mp-sub">' + referenceText + '</div>' : '') +
+            (userName ? '<div class="mp-sub">By: ' + escapeHtml(userName) + '</div>' : '');
+    }
+
     function renderMovements(movements) {
         if (!movements || !movements.length) {
             return '<div class="text-muted small">No movements found.</div>';
@@ -757,16 +880,16 @@ if ($businessId <= 0) {
         return `
             <div class="table-responsive mt-3">
                 <table class="table mp-table mb-0">
-                    <thead><tr><th>Type</th><th>Reference</th><th>In</th><th>Out</th><th>Balance</th><th>Date</th></tr></thead>
+                    <thead><tr><th>Type</th><th>Stock Entry</th><th>In</th><th>Out</th><th>Balance</th><th>Date</th></tr></thead>
                     <tbody>
                         ${movements.map(function (m) {
                             return `<tr>
-                                <td>${escapeHtml(m.movement_type || '-')}</td>
-                                <td>${escapeHtml(m.reference_type || '-')} #${escapeHtml(m.reference_id || '-')}</td>
+                                <td><span class="mp-badge badge-type">${escapeHtml(movementTypeLabel(m.movement_type || m.reference_type || '-'))}</span></td>
+                                <td>${movementSource(m)}</td>
                                 <td>${parseFloat(m.qty_in || 0).toFixed(2)}</td>
                                 <td>${parseFloat(m.qty_out || 0).toFixed(2)}</td>
                                 <td>${parseFloat(m.balance_qty || 0).toFixed(2)}</td>
-                                <td>${escapeHtml(m.created_at || '-')}</td>
+                                <td>${escapeHtml(m.created_at || m.entry_date || '-')}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
@@ -816,7 +939,7 @@ if ($businessId <= 0) {
     filterForm.addEventListener('submit', function (event) {
         event.preventDefault();
         currentPage = 1;
-        loadStock();
+        loadStock(false);
     });
 
     ['stock_status','branch_id','supplier_id','category_id','brand_id','date_from','date_to'].forEach(function (id) {
@@ -824,7 +947,7 @@ if ($businessId <= 0) {
         if (el) {
             el.addEventListener('change', function () {
                 currentPage = 1;
-                loadStock();
+                loadStock(false);
             });
         }
     });
@@ -833,7 +956,7 @@ if ($businessId <= 0) {
         window.clearTimeout(searchTimer);
         searchTimer = window.setTimeout(function () {
             currentPage = 1;
-            loadStock();
+            loadStock(false);
         }, 300);
     });
 
@@ -843,20 +966,20 @@ if ($businessId <= 0) {
             if (el) el.value = '';
         });
         currentPage = 1;
-        loadStock();
+        loadStock(false);
     });
 
     document.getElementById('prevPage').addEventListener('click', function () {
         if (currentPage > 1) {
             currentPage--;
-            loadStock();
+            loadStock(false);
         }
     });
 
     document.getElementById('nextPage').addEventListener('click', function () {
         if (currentPage < totalPages) {
             currentPage++;
-            loadStock();
+            loadStock(false);
         }
     });
 
@@ -864,6 +987,22 @@ if ($businessId <= 0) {
         const viewBtn = event.target.closest('.js-view');
         if (viewBtn) {
             viewStock(viewBtn.dataset.id);
+        }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+            loadStock(true);
+        }
+    });
+
+    window.addEventListener('focus', function () {
+        loadStock(true);
+    });
+
+    window.addEventListener('beforeunload', function () {
+        if (autoRefreshTimer) {
+            window.clearInterval(autoRefreshTimer);
         }
     });
 
