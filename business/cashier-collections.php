@@ -132,7 +132,7 @@ $permissions = collections_page_permissions($conn, 'collections.php');
                         <p>Only successfully collected customer payments and collection history are shown here.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <a href="pending-collections.php" class="btn brand-gradient"><i data-lucide="circle-alert" style="width:14px;height:14px;"></i> Pending Collections</a>
+                        <a href="cashier-pending-bills.php" class="btn brand-gradient"><i data-lucide="circle-alert" style="width:14px;height:14px;"></i> Pending Collections</a>
                         <a href="bill-list.php" class="btn btn-outline-primary"><i data-lucide="list" style="width:14px;height:14px;"></i> Bill List</a>
                         <button type="button" id="resetPage" class="btn btn-outline-secondary"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Reset</button>
                     </div>

@@ -419,31 +419,162 @@ $pageTitle = 'Barcode Print - ' . $article;
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: Arial, sans-serif; color: #111827; background: #f8fafc; }
-        .toolbar { position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 1px solid #dbe4f0; padding: 12px 16px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; }
-        .toolbar h1 { margin: 0; font-size: 18px; font-weight: 800; }
+        :root {
+            --label-w: 64mm;
+            --label-h: 36mm;
+            --label-gap: 4mm;
+            --ink: #020617;
+            --muted: #334155;
+            --border: #94a3b8;
+        }
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--ink);
+            background: #f8fafc;
+        }
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #ffffff;
+            border-bottom: 1px solid #dbe4f0;
+            padding: 12px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+        .toolbar h1 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -.02em; }
         .toolbar p { margin: 2px 0 0; font-size: 12px; color: #64748b; }
         .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .controls input { width: 90px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px 8px; font-weight: 800; }
-        .btn { border: 0; border-radius: 999px; min-height: 34px; padding: 8px 13px; font-weight: 800; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+        .controls input { width: 90px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px 8px; font-weight: 900; }
+        .btn { border: 0; border-radius: 999px; min-height: 34px; padding: 8px 13px; font-weight: 900; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
         .btn-primary { background: #2563eb; color: #fff; }
         .btn-dark { background: #111827; color: #fff; }
-        .sheet { padding: 12px; }
-        .labels { display: grid; grid-template-columns: repeat(3, 64mm); gap: 4mm; align-items: start; justify-content: center; }
-        .label { width: 64mm; height: 38mm; background: #fff; border: 1px dashed #94a3b8; border-radius: 3mm; padding: 3mm; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; page-break-inside: avoid; }
-        .brand { display: flex; justify-content: space-between; gap: 2mm; font-size: 8px; font-weight: 800; text-transform: uppercase; color: #334155; }
-        .product { font-size: 10px; font-weight: 800; line-height: 1.15; color: #0f172a; margin-top: 1mm; }
-        .meta { font-size: 8px; line-height: 1.2; color: #334155; display: grid; grid-template-columns: 1fr 1fr; gap: 1mm 2mm; margin-top: 1mm; }
-        .barcode-wrap { margin-top: 1.5mm; }
-        .barcode-svg { width: 100%; height: 13mm; display: block; }
-        .barcode-no { text-align: center; font-size: 10px; letter-spacing: .08em; font-weight: 900; margin-top: .5mm; }
-        .price { font-size: 11px; font-weight: 900; text-align: right; }
+        .sheet {
+            padding: 14px;
+            width: 100%;
+        }
+        .labels {
+            display: grid;
+            grid-template-columns: repeat(3, var(--label-w));
+            gap: var(--label-gap);
+            align-items: start;
+            justify-content: center;
+        }
+        .label {
+            width: var(--label-w);
+            height: var(--label-h);
+            background: #fff;
+            border: 0.35mm dashed var(--border);
+            border-radius: 2.8mm;
+            padding: 2.2mm 3mm 1.9mm;
+            display: grid;
+            grid-template-rows: auto auto;
+            align-content: start;
+            overflow: hidden;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .label-head {
+            min-width: 0;
+        }
+        .brand {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2mm;
+            font-size: 7.1px;
+            line-height: 1.05;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #0f172a;
+            letter-spacing: .02em;
+        }
+        .brand span:first-child { max-width: 34mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .brand span:last-child { max-width: 18mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+        .product {
+            margin-top: .65mm;
+            font-size: 9.7px;
+            font-weight: 900;
+            line-height: 1.05;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .meta {
+            margin-top: .7mm;
+            font-size: 7.05px;
+            line-height: 1.12;
+            color: var(--muted);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .45mm 2mm;
+        }
+        .meta span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .meta b { color: #0f172a; font-weight: 900; }
+        .barcode-wrap {
+            margin-top: 1.15mm;
+            min-width: 0;
+        }
+        .barcode-svg {
+            width: 100%;
+            height: 12.2mm;
+            display: block;
+            shape-rendering: crispEdges;
+        }
+        .barcode-bottom {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: end;
+            gap: 2mm;
+            margin-top: .65mm;
+            line-height: 1;
+        }
+        .barcode-no {
+            text-align: center;
+            font-size: 9.7px;
+            line-height: 1;
+            letter-spacing: .07em;
+            font-weight: 900;
+            color: #020617;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .price {
+            font-size: 7.2px;
+            line-height: 1;
+            font-weight: 900;
+            text-align: right;
+            white-space: nowrap;
+            color: #020617;
+        }
+        @media screen and (max-width: 980px) {
+            .labels { grid-template-columns: repeat(2, var(--label-w)); }
+        }
+        @media screen and (max-width: 620px) {
+            .labels { grid-template-columns: 1fr; justify-items: center; }
+        }
         @media print {
-            body { background: #fff; }
-            .toolbar { display: none; }
+            body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .toolbar { display: none !important; }
             .sheet { padding: 0; }
-            .labels { gap: 0; grid-template-columns: repeat(3, 64mm); justify-content: start; }
-            .label { border: 0.2mm solid #000; border-radius: 0; margin: 0; }
+            .labels {
+                grid-template-columns: repeat(3, var(--label-w));
+                gap: 2.5mm 3mm;
+                justify-content: start;
+            }
+            .label {
+                border: 0.25mm dashed #94a3b8;
+                border-radius: 2mm;
+                margin: 0;
+                box-shadow: none;
+            }
             @page { size: A4; margin: 8mm; }
         }
     </style>
@@ -468,7 +599,7 @@ $pageTitle = 'Barcode Print - ' . $article;
         <div class="labels">
             <?php foreach ($barcodes as $barcodeRow): ?>
                 <div class="label">
-                    <div>
+                    <div class="label-head">
                         <div class="brand">
                             <span>GK FOOTWEAR</span>
                             <span><?= bp_e($item['brand_name'] ?? '') ?></span>
@@ -483,11 +614,12 @@ $pageTitle = 'Barcode Print - ' . $article;
                     </div>
 
                     <div class="barcode-wrap">
-                        <?= bp_code128_svg((string)$barcodeRow['barcode_value'], 48) ?>
-                        <div class="barcode-no"><?= bp_e($barcodeRow['barcode_value']) ?></div>
+                        <?= bp_code128_svg((string)$barcodeRow['barcode_value'], 50) ?>
+                        <div class="barcode-bottom">
+                            <div class="barcode-no"><?= bp_e($barcodeRow['barcode_value']) ?></div>
+                            <div class="price">MRP: ₹<?= number_format((float)$item['mrp_rate'], 2) ?></div>
+                        </div>
                     </div>
-
-                    <div class="price">MRP: ₹<?= number_format((float)$item['mrp_rate'], 2) ?></div>
                 </div>
             <?php endforeach; ?>
         </div>

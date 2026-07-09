@@ -240,39 +240,92 @@ if ($businessId <= 0) {
     .amount-good { color:#15803d; font-weight:800; }
     .amount-due { color:#b91c1c; font-weight:800; }
     .amount-dark { color:#0f172a; font-weight:800; }
-    /* Compact report table: keep all bill-wise columns inside the screen without text overlap. */
-    .sales-table { width: 100%; min-width: 0 !important; table-layout: fixed; }
+    /* Compact, aligned report table: works for Bill-wise, Item Sales, Daily Trend, Branch Summary and Payment Summary. */
+    .sales-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sales-table-wrap::-webkit-scrollbar { height: 8px; }
+    .sales-table-wrap::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; }
+    .sales-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 0;
+    }
+    .sales-table.tab-bills { min-width: 1160px; }
+    .sales-table.tab-items { min-width: 1080px; }
+    .sales-table.tab-trend { min-width: 760px; }
+    .sales-table.tab-branch { min-width: 760px; }
+    .sales-table.tab-payment { min-width: 620px; }
     .sales-table th,
     .sales-table td {
-        white-space: normal;
-        word-break: normal;
-        overflow-wrap: break-word;
-        padding: 7px 5px;
+        padding: 8px 8px;
         vertical-align: middle;
+        border-bottom: 1px solid #e5edf7;
     }
-    .sales-table th { font-size: 9px; line-height: 1.12; }
-    .sales-table td { font-size: 10px; line-height: 1.18; }
-
-    /* Bill-wise column widths are tuned for 100% screen fit. */
-    .sales-table.tab-bills { min-width: 0 !important; }
-    .sales-table.tab-bills th:nth-child(1), .sales-table.tab-bills td:nth-child(1) { width: 7%; }
-    .sales-table.tab-bills th:nth-child(2), .sales-table.tab-bills td:nth-child(2) { width: 8%; }
-    .sales-table.tab-bills th:nth-child(3), .sales-table.tab-bills td:nth-child(3) { width: 10%; }
-    .sales-table.tab-bills th:nth-child(4), .sales-table.tab-bills td:nth-child(4) { width: 12%; }
-    .sales-table.tab-bills th:nth-child(5), .sales-table.tab-bills td:nth-child(5) { width: 8%; }
-    .sales-table.tab-bills th:nth-child(6), .sales-table.tab-bills td:nth-child(6) { width: 5%; text-align:center; }
-    .sales-table.tab-bills th:nth-child(7), .sales-table.tab-bills td:nth-child(7),
-    .sales-table.tab-bills th:nth-child(8), .sales-table.tab-bills td:nth-child(8),
-    .sales-table.tab-bills th:nth-child(9), .sales-table.tab-bills td:nth-child(9),
-    .sales-table.tab-bills th:nth-child(10), .sales-table.tab-bills td:nth-child(10),
-    .sales-table.tab-bills th:nth-child(11), .sales-table.tab-bills td:nth-child(11) { width: 7.2%; text-align:right; }
-    .sales-table.tab-bills th:nth-child(12), .sales-table.tab-bills td:nth-child(12) { width: 6.4%; text-align:center; }
-    .sales-table.tab-bills th:nth-child(13), .sales-table.tab-bills td:nth-child(13) { width: 6.4%; text-align:center; }
-
+    .sales-table th {
+        font-size: 10px;
+        line-height: 1.15;
+        font-weight: 850;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        background: #f1f5f9;
+        color: #0f172a;
+        text-transform: uppercase;
+        letter-spacing: .035em;
+    }
+    .sales-table td {
+        font-size: 11px;
+        line-height: 1.2;
+        color: #0f172a;
+    }
+    .sales-th-left, .sales-td-left { text-align: left; }
+    .sales-th-center, .sales-td-center { text-align: center; }
+    .sales-th-right, .sales-td-right { text-align: right; }
+    .sales-cell {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+    .sales-cell.nowrap {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sales-cell.wrap {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+    .sales-cell.center { text-align: center; }
+    .sales-cell.amount {
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+    }
+    .sales-cell.trend { padding-left: 4px; }
     .sales-branch-cell,
     .sales-customer-cell { display: block; width: 100%; min-width: 0; line-height: 1.18; }
-    .sales-table .mp-badge { max-width: 100%; font-size: 9px; padding: 4px 6px; line-height: 1.1; }
-    .sales-table .badge-code { display:inline-flex; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sales-table .mp-badge { max-width: 100%; font-size: 9px; padding: 4px 7px; line-height: 1.1; }
+    .sales-table .badge-code,
+    .sales-table .badge-money,
+    .sales-table .badge-branch,
+    .sales-table .badge-count {
+        display: inline-flex;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .sales-branch-chip {
         display: block;
         max-width: 100%;
@@ -281,28 +334,26 @@ if ($businessId <= 0) {
         text-overflow: clip;
         line-height: 1.12;
         text-align: center;
-        padding: 5px 5px;
+        padding: 5px 6px;
     }
     .sales-branch-chip .branch-main,
     .sales-branch-chip .branch-floor { display:block; }
     .sales-branch-chip .branch-main { font-weight:850; }
     .sales-branch-chip .branch-floor { font-size:8.4px; margin-top:1px; }
     .sales-customer-cell .mp-title,
-    .sales-customer-cell .mp-sub {
+    .sales-customer-cell .mp-sub,
+    .sales-product-cell .mp-title,
+    .sales-product-cell .mp-sub {
         display: block;
         white-space: normal;
         overflow-wrap: anywhere;
         word-break: normal;
         line-height: 1.15;
     }
-    .sales-customer-cell .mp-title { margin-bottom: 1px; font-size: 10px; }
-    .sales-customer-cell .mp-sub { font-size: 8.8px; }
-    .sales-table.tab-bills td:nth-child(5) { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .sales-table.tab-bills td:nth-child(7),
-    .sales-table.tab-bills td:nth-child(8),
-    .sales-table.tab-bills td:nth-child(9),
-    .sales-table.tab-bills td:nth-child(10),
-    .sales-table.tab-bills td:nth-child(11) { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:9.7px; }
+    .sales-customer-cell .mp-title { margin-bottom: 1px; font-size: 10.5px; }
+    .sales-customer-cell .mp-sub { font-size: 9px; }
+    .sales-product-cell .mp-title { font-size: 10.5px; }
+    .sales-product-cell .mp-sub { font-size: 9px; }
     .sales-table .mp-avatar { width: 30px; height: 30px; border-radius: 10px; font-size: 12px; }
     .sales-table .mp-title { font-size: 11px; }
     .sales-table .mp-sub { font-size: 9.5px; }
@@ -318,7 +369,8 @@ if ($businessId <= 0) {
         border-radius: 999px;
         background: #e2e8f0;
         overflow: hidden;
-        min-width: 90px;
+        width: 100%;
+        min-width: 0;
     }
     .mini-bar span {
         display: block;
@@ -338,7 +390,7 @@ if ($businessId <= 0) {
     html, body { max-width: 100%; overflow-x: hidden; }
     #main { min-width: 0; max-width: 100%; overflow-x: hidden; }
     .master-page, .mp-card, .sales-list-card { max-width: 100%; min-width: 0; }
-    .sales-list-card .table-responsive { width: 100%; max-width: 100%; overflow-x: hidden; overflow-y: visible; }
+    .sales-list-card .table-responsive { width: 100%; max-width: 100%; }
     @media (max-width: 1400px) {
         .sales-filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
@@ -426,8 +478,9 @@ if ($businessId <= 0) {
                     </div>
                 </div>
 
-                <div class="d-none d-md-block table-responsive px-3 pb-3">
-                    <table class="table mp-table sales-table mb-0">
+                <div class="d-none d-md-block table-responsive sales-table-wrap px-3 pb-3">
+                    <table class="table mp-table sales-table mb-0 tab-bills">
+                        <colgroup id="tableCols"></colgroup>
                         <thead id="tableHead"></thead>
                         <tbody id="tableBody"><tr><td class="text-center text-muted py-4">Loading sales report...</td></tr></tbody>
                     </table>
@@ -566,6 +619,9 @@ function cfgFor(tab){
         bills: {
             title:'Bill-wise Sales', sub:'Latest matching sales bills.',
             head:['Bill No','Date & Time','Branch','Customer','Sales User','Items','MRP','Discount','Net','Paid','Balance','Payment','Bill Status'],
+            widths:['7%','9%','10%','12%','8%','6%','7%','7%','7%','7%','7%','6.5%','6.5%'],
+            align:['left','left','center','left','left','center','right','right','right','right','right','center','center'],
+            wrap:[2,3],
             row:r=>[
                 '<span class="mp-badge badge-code">'+esc(r.bill_no || '-')+'</span>',
                 esc(r.bill_datetime || '-'),
@@ -586,30 +642,69 @@ function cfgFor(tab){
         items: {
             title:'Item Sales', sub:'Article, size, brand and category level performance.',
             head:['Article','Product','Brand','Category','Size','Color','Bills','Qty','MRP Value','Discount','Sales Value','Avg Rate'],
+            widths:['8%','15%','10%','10%','7%','8%','7%','7%','8%','7%','8%','7%'],
+            align:['left','left','left','left','center','center','center','right','right','right','right','right'],
+            wrap:[1,2,3],
             row:r=>[
                 '<span class="mp-badge badge-code">'+esc(r.article_no || '-')+'</span>',
-                '<div class="mp-title">'+esc(r.article_name || '-')+'</div>',
-                esc(r.brand_name || '-'), esc(r.category_name || '-'), esc(r.size || '-'), esc(r.color || '-'),
-                '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>', num(r.total_qty), money(r.mrp_value), money(r.item_discount), '<span class="amount-good">'+money(r.sales_value)+'</span>', money(r.average_selling_rate)
+                '<div class="sales-product-cell"><div class="mp-title">'+esc(r.article_name || '-')+'</div></div>',
+                esc(r.brand_name || '-'),
+                esc(r.category_name || '-'),
+                esc(r.size || '-'),
+                esc(r.color || '-'),
+                '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>',
+                num(r.total_qty),
+                money(r.mrp_value),
+                money(r.item_discount),
+                '<span class="amount-good">'+money(r.sales_value)+'</span>',
+                money(r.average_selling_rate)
             ],
             mobile:r=>mobileItem(r)
         },
         trend: {
             title:'Daily Trend', sub:'Day-wise sales, collection and balance.',
             head:['Date','Bills','Net Sales','Paid','Balance','Trend'],
-            row:r=>[esc(r.display_date || '-'), '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>', '<span class="amount-dark">'+money(r.net_sales)+'</span>', '<span class="amount-good">'+money(r.paid_amount)+'</span>', '<span class="'+(parseFloat(r.balance_amount||0)>0?'amount-due':'amount-good')+'">'+money(r.balance_amount)+'</span>', bar(r.net_sales)],
+            widths:['15%','12%','18%','18%','18%','19%'],
+            align:['left','center','right','right','right','left'],
+            wrap:[],
+            row:r=>[
+                esc(r.display_date || '-'),
+                '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>',
+                '<span class="amount-dark">'+money(r.net_sales)+'</span>',
+                '<span class="amount-good">'+money(r.paid_amount)+'</span>',
+                '<span class="'+(parseFloat(r.balance_amount||0)>0?'amount-due':'amount-good')+'">'+money(r.balance_amount)+'</span>',
+                bar(r.net_sales)
+            ],
             mobile:r=>mobileTrend(r)
         },
         branch: {
             title:'Branch Summary', sub:'Firm / branch-wise sales result.',
             head:['Branch','Floor','Bills','Net Sales','Paid','Balance'],
-            row:r=>['<span class="mp-badge badge-branch">'+esc(r.branch_name || '-')+'</span>', esc(r.floor_name || '-'), '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>', '<span class="amount-dark">'+money(r.net_sales)+'</span>', '<span class="amount-good">'+money(r.paid_amount)+'</span>', '<span class="'+(parseFloat(r.balance_amount||0)>0?'amount-due':'amount-good')+'">'+money(r.balance_amount)+'</span>'],
+            widths:['24%','18%','12%','16%','15%','15%'],
+            align:['left','left','center','right','right','right'],
+            wrap:[0,1],
+            row:r=>[
+                '<span class="mp-badge badge-branch">'+esc(r.branch_name || '-')+'</span>',
+                esc(r.floor_name || '-'),
+                '<span class="mp-badge badge-count">'+num(r.bill_count)+'</span>',
+                '<span class="amount-dark">'+money(r.net_sales)+'</span>',
+                '<span class="amount-good">'+money(r.paid_amount)+'</span>',
+                '<span class="'+(parseFloat(r.balance_amount||0)>0?'amount-due':'amount-good')+'">'+money(r.balance_amount)+'</span>'
+            ],
             mobile:r=>mobileBranch(r)
         },
         payment: {
             title:'Payment Summary', sub:'Payment method-wise collection result.',
             head:['Payment Method','Type','Count','Amount'],
-            row:r=>['<span class="mp-badge badge-money">'+esc(r.payment_method_name || '-')+'</span>', esc(r.method_type || '-'), '<span class="mp-badge badge-count">'+num(r.payment_count)+'</span>', '<span class="amount-good">'+money(r.paid_amount)+'</span>'],
+            widths:['38%','24%','16%','22%'],
+            align:['left','left','center','right'],
+            wrap:[0,1],
+            row:r=>[
+                '<span class="mp-badge badge-money">'+esc(r.payment_method_name || '-')+'</span>',
+                esc(r.method_type || '-'),
+                '<span class="mp-badge badge-count">'+num(r.payment_count)+'</span>',
+                '<span class="amount-good">'+money(r.paid_amount)+'</span>'
+            ],
             mobile:r=>mobilePayment(r)
         }
     }[tab];
@@ -621,29 +716,49 @@ function renderTable(tab, rows){
     if (tableEl) {
         tableEl.className = 'table mp-table sales-table mb-0 tab-' + tab;
     }
+
+    const colGroup = document.getElementById('tableCols');
+    if (colGroup) {
+        colGroup.innerHTML = (cfg.widths || []).map(function(width){
+            return '<col style="width:'+esc(width)+'">';
+        }).join('');
+    }
+
     document.getElementById('tableTitle').textContent=cfg.title;
     document.getElementById('tableSub').textContent=cfg.sub;
     document.getElementById('currentViewName').textContent=cfg.title;
     document.getElementById('rowCount').textContent=rows.length+' rows';
-    document.getElementById('tableHead').innerHTML='<tr>'+cfg.head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>';
+    document.getElementById('tableHead').innerHTML='<tr>'+cfg.head.map(function(h, i){
+        return '<th class="sales-th-'+cellAlign(cfg, i)+'">'+esc(h)+'</th>';
+    }).join('')+'</tr>';
     if(!rows.length){
         document.getElementById('tableBody').innerHTML='<tr><td colspan="'+cfg.head.length+'" class="text-center text-muted py-4">No records found.</td></tr>';
         document.getElementById('salesMobileCards').innerHTML='<div class="mp-mobile-card text-center text-muted">No records found.</div>';
         return;
     }
-    document.getElementById('tableBody').innerHTML=rows.map(r=>'<tr>'+cfg.row(r).map((c,i)=>'<td class="'+numericClass(tab, i, cfg.head.length)+'">'+c+'</td>').join('')+'</tr>').join('');
+    document.getElementById('tableBody').innerHTML=rows.map(function(r){
+        const row = cfg.row(r);
+        return '<tr>'+row.map(function(c,i){ return reportCell(cfg, c, i); }).join('')+'</tr>';
+    }).join('');
     document.getElementById('salesMobileCards').innerHTML=rows.map(r=>cfg.mobile(r)).join('');
 }
 
+function cellAlign(cfg, index){
+    return ((cfg.align || [])[index] || 'left');
+}
+
+function reportCell(cfg, content, index){
+    const align = cellAlign(cfg, index);
+    const isWrap = (cfg.wrap || []).includes(index);
+    const isAmount = align === 'right';
+    const isTrend = String(content).includes('mini-bar');
+    const innerClass = 'sales-cell ' + (isWrap ? 'wrap' : 'nowrap') + (align === 'center' ? ' center' : '') + (isAmount ? ' amount' : '') + (isTrend ? ' trend' : '');
+    return '<td class="sales-td-'+align+'"><div class="'+innerClass+'">'+content+'</div></td>';
+}
+
 function numericClass(tab, index, total){
-    const numericMap = {
-        bills: [5,6,7,8,9,10],
-        items: [6,7,8,9,10,11],
-        trend: [1,2,3,4],
-        branch: [2,3,4,5],
-        payment: [2,3]
-    };
-    return (numericMap[tab] || []).includes(index) ? 'text-end' : '';
+    const cfg = cfgFor(tab);
+    return cellAlign(cfg, index) === 'right' ? 'text-end' : '';
 }
 
 function mobileBill(r){

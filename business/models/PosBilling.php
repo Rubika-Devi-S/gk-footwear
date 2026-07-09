@@ -408,19 +408,51 @@ class PosBilling
         $customerId = (int)($payloadCustomer['customer_id'] ?? 0);
         $name = $this->cleanText($payloadCustomer['customer_name'] ?? $payloadCustomer['name'] ?? '', 'Walk-in Customer');
         $mobile = $this->cleanMobile($payloadCustomer['mobile'] ?? $payloadCustomer['customer_mobile'] ?? '');
-        $isWalkIn = (strcasecmp($name, 'Walk-in Customer') === 0 && $mobile === '') || ($name === '' && $mobile === '');
 
-        if ($isWalkIn) {
-            return array('customer_id' => 0, 'customer_name' => 'Walk-in Customer', 'mobile' => '');
-        }
-
+        /*
+         * Existing customer must always be used instead of creating duplicate.
+         * Search by selected customer_id, then mobile, then exact name.
+         */
         $existing = $this->findCustomer($businessId, $customerId, $name, $mobile);
         if ($existing) {
-            return array('customer_id' => (int)$existing['customer_id'], 'customer_name' => $existing['customer_name'], 'mobile' => $existing['mobile'] ?? '', 'email' => $existing['email'] ?? '', 'address' => $existing['address'] ?? '', 'loyalty_points' => $existing['loyalty_points'] ?? 0);
+            return array(
+                'customer_id' => (int)$existing['customer_id'],
+                'customer_name' => $existing['customer_name'],
+                'mobile' => $existing['mobile'] ?? '',
+                'email' => $existing['email'] ?? '',
+                'address' => $existing['address'] ?? '',
+                'loyalty_points' => $existing['loyalty_points'] ?? 0,
+                'is_walkin_customer' => 0,
+                'customer_source' => 'master',
+                'save_to_master' => 1,
+                'visible_in_customer_master' => 1,
+            );
         }
 
-        $created = $this->saveCustomer($businessId, array('customer_name' => $name, 'mobile' => $mobile));
-        return array('customer_id' => (int)$created['customer_id'], 'customer_name' => $created['customer_name'], 'mobile' => $created['mobile'] ?? '', 'email' => $created['email'] ?? '', 'address' => $created['address'] ?? '', 'loyalty_points' => $created['loyalty_points'] ?? 0);
+        /*
+         * POS/Create Bill new customer rule:
+         * Do NOT call saveCustomer() here.
+         * Any new name/mobile/details from Create Bill is bill-only Walk-in data.
+         * It will appear in Bill List and Cashier Collection from bills.customer_name/customer_mobile,
+         * but it will not be inserted into customers table/customer.php.
+         */
+        if ($name === '' || preg_match('/^\d+$/', $name)) {
+            $name = 'Walk-in Customer';
+        }
+
+        return array(
+            'customer_id' => 0,
+            'customer_name' => $name,
+            'mobile' => $mobile,
+            'email' => $payloadCustomer['email'] ?? '',
+            'address' => $payloadCustomer['address'] ?? '',
+            'gstin' => $payloadCustomer['gstin'] ?? '',
+            'loyalty_points' => 0,
+            'is_walkin_customer' => 1,
+            'customer_source' => 'walk_in',
+            'save_to_master' => 0,
+            'visible_in_customer_master' => 0,
+        );
     }
 
     private function productByStockItemIdForUpdate($businessId, $branchId, $stockItemId)

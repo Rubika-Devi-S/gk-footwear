@@ -415,6 +415,7 @@ class StockList
                 si.item_status,
                 si.created_at,
                 GROUP_CONCAT(DISTINCT sb.barcode_value ORDER BY sb.barcode_id SEPARATOR ', ') AS barcode_values,
+                MIN(sb.barcode_value) AS barcode_value,
                 MIN(sb.barcode_id) AS barcode_id
             FROM stock_inward_items si
             INNER JOIN stock_inward_batches sib
@@ -474,7 +475,8 @@ class StockList
                 s.gstin AS supplier_gstin,
                 c.category_name,
                 b.brand_name,
-                GROUP_CONCAT(DISTINCT sb.barcode_value ORDER BY sb.barcode_id SEPARATOR ', ') AS barcode_values
+                GROUP_CONCAT(DISTINCT sb.barcode_value ORDER BY sb.barcode_id SEPARATOR ', ') AS barcode_values,
+                MIN(sb.barcode_value) AS barcode_value
             FROM stock_inward_items si
             INNER JOIN stock_inward_batches sib
                 ON sib.batch_id = si.batch_id

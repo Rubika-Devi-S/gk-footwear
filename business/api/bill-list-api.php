@@ -239,6 +239,36 @@ function bl_payment_methods(mysqli $conn, $businessId) {
     return bl_fetch_all($conn, "SELECT payment_method_id, payment_method_name, method_type FROM payment_methods WHERE business_id = ? AND status = 1 ORDER BY FIELD(method_type,'cash','upi','card','cheque','credit','split','other'), payment_method_name ASC", 'i', array($businessId));
 }
 
+
+
+function bl_normalize_bill_customer_row(array $row) {
+    $customerId = (int)($row['customer_id'] ?? 0);
+    $name = trim((string)($row['customer_name'] ?? ''));
+    $mobile = trim((string)($row['customer_mobile'] ?? ''));
+
+    if ($customerId <= 0) {
+        // Walk-in / name-only POS customer: keep visible in Bill List and Cashier Collection,
+        // but do not treat it as a customer master record.
+        if ($name === '' || preg_match('/^\d+$/', $name)) {
+            $name = 'Walk-in Customer';
+        }
+        $row['customer_id'] = null;
+        $row['customer_name'] = $name;
+        $row['customer_mobile'] = $mobile;
+        $row['is_walkin_customer'] = 1;
+        $row['customer_source'] = 'walk_in';
+        $row['visible_in_customer_master'] = 0;
+        return $row;
+    }
+
+    $row['customer_name'] = $name !== '' ? $name : 'Customer';
+    $row['customer_mobile'] = $mobile;
+    $row['is_walkin_customer'] = 0;
+    $row['customer_source'] = 'master';
+    $row['visible_in_customer_master'] = 1;
+    return $row;
+}
+
 function bl_list(mysqli $conn, $businessId, $userId, $isAdmin, array $input) {
     if (!bl_table_exists($conn, 'bills')) throw new Exception('Bills table is missing.');
     $page = max(1, (int)($input['page'] ?? 1));
@@ -282,6 +312,10 @@ function bl_list(mysqli $conn, $businessId, $userId, $isAdmin, array $input) {
         LIMIT {$perPage} OFFSET {$offset}
     ", $types, $params);
 
+    foreach ($rows as $idx => $row) {
+        $rows[$idx] = bl_normalize_bill_customer_row($row);
+    }
+
     return array(
         'items' => $rows,
         'pagination' => array('page' => $page, 'per_page' => $perPage, 'total' => $total, 'total_pages' => $totalPages),
@@ -310,6 +344,7 @@ function bl_get(mysqli $conn, $businessId, $userId, $isAdmin, $billId) {
         LIMIT 1
     ", $types, $params);
     if (!$bill) throw new Exception('Bill not found or access denied.');
+    $bill = bl_normalize_bill_customer_row($bill);
 
     $items = array();
     if (bl_table_exists($conn, 'bill_items')) {
