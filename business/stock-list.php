@@ -253,15 +253,118 @@ if ($businessId <= 0) {
         font-weight: 700;
     }
 
-    .qr-mini {
-        width: 26px;
-        height: 26px;
-        border-radius: 7px;
-        display: inline-grid;
-        place-items: center;
-        background: repeating-linear-gradient(45deg,#0f172a 0 2px,#fff 2px 4px);
-        border: 1px solid #cbd5e1;
+    /* Real barcode preview used in Stock List and Stock Details modal.
+       This matches the barcode generated in Stock Inward / barcode-print.php. */
+    .barcode-cell { min-width: 180px; max-width: 230px; }
+    .barcode-chip {
+        width: 100%;
+        max-width: 220px;
+        border: 1px solid #bae6fd;
+        background: linear-gradient(135deg, #f8fbff, #ecfeff);
+        color: #0f172a;
+        border-radius: 13px;
+        padding: 6px 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 6px 14px rgba(14, 116, 144, .08);
         overflow: hidden;
+    }
+    .barcode-preview {
+        flex: 1 1 auto;
+        min-width: 92px;
+        max-width: 132px;
+        overflow: hidden;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 3px 4px;
+        border: 1px solid #dbeafe;
+    }
+    .barcode-svg-mini,
+    .barcode-svg-modal {
+        width: 100%;
+        display: block;
+    }
+    .barcode-svg-mini { height: 24px; }
+    .barcode-code-wrap {
+        flex: 0 0 auto;
+        min-width: 58px;
+        max-width: 80px;
+        overflow: hidden;
+    }
+    .barcode-chip .barcode-code {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .01em;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+    .barcode-chip .barcode-extra {
+        display: inline-flex;
+        margin-top: 3px;
+        font-size: 9px;
+        font-weight: 850;
+        border-radius: 999px;
+        padding: 2px 5px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        line-height: 1;
+    }
+    .barcode-empty {
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #64748b;
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: 10px;
+        font-weight: 750;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    .barcode-modal-card {
+        border: 1px solid #bae6fd;
+        background: linear-gradient(135deg, #f0f9ff, #ecfeff);
+        border-radius: 18px;
+        padding: 12px;
+    }
+    .barcode-modal-title {
+        font-size: 10px;
+        color: #0369a1;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        margin-bottom: 8px;
+    }
+    .barcode-modal-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+    }
+    .barcode-modal-code {
+        border: 1px solid #93c5fd;
+        background: #ffffff;
+        color: #0f172a;
+        border-radius: 14px;
+        padding: 8px 10px;
+        box-shadow: 0 5px 14px rgba(15,23,42,.06);
+        overflow: hidden;
+    }
+    .barcode-modal-code .barcode-svg-modal { height: 40px; margin-bottom: 5px; }
+    .barcode-modal-code .barcode-text {
+        display:block;
+        text-align:center;
+        font-size:12px;
+        font-weight:900;
+        letter-spacing:.04em;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
     }
 
     .stock-detail-grid {
@@ -465,7 +568,7 @@ if ($businessId <= 0) {
                             <th>Selling</th>
                             <th>QR / Barcode</th>
                             <th>Status</th>
-                            <th style="width: 160px;">Action</th>
+                            <th style="width: 120px;">Action</th>
                         </tr>
                         </thead>
                         <tbody id="stockTableBody">
@@ -641,11 +744,119 @@ if ($businessId <= 0) {
         return '<span class="mp-badge status-inactive">' + escapeHtml(status || '-') + '</span>';
     }
 
-    function qrContent(value) {
+    function normalizeBarcodeList(value) {
         const text = String(value || '').trim();
-        if (!text) return '<span class="mp-badge badge-qr">No QR</span>';
-        const first = text.split(',')[0].trim();
-        return '<span class="mp-badge badge-qr" title="' + escapeHtml(text) + '"><span class="qr-mini"></span> ' + escapeHtml(first) + '</span>';
+        if (!text || text === '-' || text.toLowerCase() === 'no qr') return [];
+        const seen = {};
+        return text
+            .split(/[|,\n]+/)
+            .map(function (v) { return v.trim(); })
+            .filter(function (v) {
+                if (!v || seen[v]) return false;
+                seen[v] = true;
+                return true;
+            });
+    }
+
+    function stockBarcodeValue(item) {
+        item = item || {};
+        const candidates = [
+            item.barcode_values,
+            item.barcode_value,
+            item.qr_code,
+            item.latest_qr_code,
+            item.stock_barcode,
+            item.generated_barcode
+        ];
+        for (let i = 0; i < candidates.length; i++) {
+            const value = String(candidates[i] || '').trim();
+            if (value && value !== '-' && value.toLowerCase() !== 'no qr') return value;
+        }
+        return '';
+    }
+
+    function code128Svg(value, className, height) {
+        value = String(value || '').trim();
+        if (!value) return '';
+
+        const patterns = [
+            '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+            '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+            '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+            '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+            '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+            '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+            '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+            '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+            '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+            '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+            '114131','311141','411131','211412','211214','211232','2331112'
+        ];
+
+        const codes = [104];
+        let checksum = 104;
+        let position = 1;
+
+        for (let i = 0; i < value.length; i++) {
+            let ord = value.charCodeAt(i);
+            if (ord < 32 || ord > 126) ord = 32;
+            const code = ord - 32;
+            codes.push(code);
+            checksum += code * position;
+            position++;
+        }
+
+        codes.push(checksum % 103);
+        codes.push(106);
+
+        const moduleWidth = 1.45;
+        const quiet = 10;
+        let x = quiet;
+        let bars = '';
+
+        codes.forEach(function (code) {
+            const pattern = patterns[code] || patterns[0];
+            let black = true;
+            for (let i = 0; i < pattern.length; i++) {
+                const width = parseInt(pattern.charAt(i), 10) * moduleWidth;
+                if (black) {
+                    bars += '<rect x="' + x.toFixed(2) + '" y="0" width="' + width.toFixed(2) + '" height="' + height + '" fill="#000"/>';
+                }
+                x += width;
+                black = !black;
+            }
+        });
+
+        const totalWidth = x + quiet;
+        return '<svg class="' + escapeHtml(className || 'barcode-svg-mini') + '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + totalWidth.toFixed(2) + ' ' + height + '" preserveAspectRatio="none">' + bars + '</svg>';
+    }
+
+    function qrContent(value) {
+        const list = normalizeBarcodeList(value);
+        if (!list.length) {
+            return '<span class="barcode-empty"><i data-lucide="barcode" style="width:12px;height:12px"></i> No Barcode</span>';
+        }
+        const first = list[0];
+        const all = list.join(', ');
+        const extra = list.length > 1 ? '<span class="barcode-extra">+' + (list.length - 1) + '</span>' : '';
+        return '<span class="barcode-chip" title="' + escapeHtml(all) + '">' +
+            '<span class="barcode-preview">' + code128Svg(first, 'barcode-svg-mini', 28) + '</span>' +
+            '<span class="barcode-code-wrap"><span class="barcode-code">' + escapeHtml(first) + '</span>' + extra + '</span>' +
+            '</span>';
+    }
+
+    function barcodeModalContent(value) {
+        const list = normalizeBarcodeList(value);
+        if (!list.length) {
+            return '<div class="barcode-modal-card"><div class="barcode-modal-title">Barcode / QR Code</div><span class="barcode-empty"><i data-lucide="barcode" style="width:12px;height:12px"></i> No barcode generated</span></div>';
+        }
+        return '<div class="barcode-modal-card">' +
+            '<div class="barcode-modal-title">Barcode / QR Code</div>' +
+            '<div class="barcode-modal-list">' +
+            list.map(function (code) {
+                return '<div class="barcode-modal-code">' + code128Svg(code, 'barcode-svg-modal', 44) + '<span class="barcode-text">' + escapeHtml(code) + '</span></div>';
+            }).join('') +
+            '</div></div>';
     }
 
     function renderStock(items) {
@@ -685,7 +896,7 @@ if ($businessId <= 0) {
                     <td>${stockBadge(item)}</td>
                     <td class="fw-bold">${money.format(parseFloat(item.mrp_rate || 0))}</td>
                     <td class="fw-bold">${money.format(parseFloat(item.selling_rate || 0))}</td>
-                    <td>${qrContent(item.barcode_values || '')}</td>
+                    <td class="barcode-cell">${qrContent(stockBarcodeValue(item))}</td>
                     <td>${statusBadge(item.item_status)}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn js-view" data-id="${itemId}">View</button>
@@ -713,7 +924,7 @@ if ($businessId <= 0) {
                                 <span class="mp-badge badge-code">${escapeHtml(item.brand_name || 'No Brand')}</span>
                                 <span class="mp-badge badge-code">Colour: ${escapeHtml(item.color || '-')}</span>
                                 ${stockBadge(item)}
-                                ${qrContent(item.barcode_values || '')}
+                                ${qrContent(stockBarcodeValue(item))}
                             </div>
                             <div class="fw-bold mt-2">MRP: ${money.format(parseFloat(item.mrp_rate || 0))} · Selling: ${money.format(parseFloat(item.selling_rate || 0))}</div>
                             <div class="d-flex flex-wrap gap-2 mt-2">
@@ -910,7 +1121,7 @@ if ($businessId <= 0) {
             }
 
             const item = data.item || {};
-            const barcode = item.barcode_values || '';
+            const barcode = stockBarcodeValue(item);
             detailBody.innerHTML = `
                 <div class="stock-detail-grid">
                     ${detailBox('Article', escapeHtml(item.article_no || '-') + '<div class="mp-sub">' + escapeHtml(item.article_name || '-') + '</div>')}
@@ -922,10 +1133,8 @@ if ($businessId <= 0) {
                     ${detailBox('Qty / Available', parseFloat(item.qty || 0).toFixed(2) + '<div class="mp-sub">Available: ' + parseFloat(item.available_qty || 0).toFixed(2) + '</div>')}
                     ${detailBox('MRP / Selling', money.format(parseFloat(item.mrp_rate || 0)) + '<div class="mp-sub">Selling: ' + money.format(parseFloat(item.selling_rate || 0)) + '</div>')}
                 </div>
-                <div class="mt-3 p-3 rounded-4 border bg-light">
-                    <div class="mp-stat-label mb-1">Barcode / QR</div>
-                    ${qrContent(barcode)}
-                    <div class="mp-sub mt-2">${escapeHtml(barcode || 'No barcode generated')}</div>
+                <div class="mt-3">
+                    ${barcodeModalContent(barcode)}
                 </div>
                 <h6 class="fw-bold mt-4 mb-2">Stock Movement History</h6>
                 ${renderMovements(data.movements || [])}

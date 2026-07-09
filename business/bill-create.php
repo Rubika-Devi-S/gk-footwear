@@ -1080,6 +1080,137 @@ if ($businessId <= 0) {
             #printArea { position: absolute; left: 0; top: 0; width: 100%; }
             .modal-backdrop { display:none !important; }
         }
+
+
+        /* =========================================================
+           FINAL SIZE & COLOR RESPONSIVE FIX
+           Keeps Size-wise Stock and Color inside the same model/card.
+           Filters size chips by selected color and avoids overflow.
+           ========================================================= */
+        .compact-product-layout {
+            grid-template-columns: minmax(235px, .95fr) minmax(330px, 1.25fr) minmax(245px, .82fr) minmax(300px, 1.05fr) !important;
+            align-items: stretch !important;
+        }
+
+        .compact-selector-card {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            display: grid !important;
+            grid-template-rows: auto minmax(0, 1fr) auto !important;
+            align-content: start !important;
+        }
+
+        .compact-selector-card .compact-card-title {
+            margin-bottom: 1px !important;
+        }
+
+        .compact-selector-group {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        .compact-selector-card .size-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)) !important;
+            gap: 6px !important;
+            max-height: 96px !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 1px 2px 2px 1px !important;
+            align-content: start !important;
+            scrollbar-width: thin;
+        }
+
+        .compact-selector-card .color-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)) !important;
+            gap: 6px !important;
+            max-height: none !important;
+            overflow: hidden !important;
+            padding: 1px !important;
+            align-content: start !important;
+        }
+
+        .compact-selector-card .size-chip,
+        .compact-selector-card .color-chip {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            min-height: 30px !important;
+            padding: 5px 8px !important;
+            border-radius: 999px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 5px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            line-height: 1 !important;
+        }
+
+        .compact-selector-card .size-chip .size-main-text {
+            font-size: 13px !important;
+            font-weight: 1000 !important;
+            line-height: 1 !important;
+        }
+
+        .compact-selector-card .size-chip small,
+        .compact-selector-card .color-chip small {
+            flex: 0 0 auto !important;
+            font-size: 9px !important;
+            font-weight: 950 !important;
+            opacity: .9 !important;
+            margin: 0 !important;
+        }
+
+        .compact-selector-card .color-chip .color-main-text {
+            min-width: 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        .compact-selector-card .color-chip.active {
+            color: #fff !important;
+            background: linear-gradient(135deg, var(--pos-brand-1), var(--pos-brand-2)) !important;
+            border-color: transparent !important;
+            box-shadow: 0 8px 18px rgba(37, 99, 235, .20) !important;
+        }
+
+        .compact-selector-card .color-chip.active small,
+        .compact-selector-card .color-chip.active .color-main-text {
+            color: #fff !important;
+        }
+
+        .compact-selector-card .color-dot {
+            flex: 0 0 12px !important;
+            width: 12px !important;
+            height: 12px !important;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .18) !important;
+        }
+
+        @media (max-width: 1599px) {
+            .compact-product-layout {
+                grid-template-columns: minmax(220px, .92fr) minmax(300px, 1.15fr) minmax(225px, .86fr) minmax(285px, 1fr) !important;
+            }
+            .compact-selector-card .size-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)) !important; max-height: 92px !important; }
+            .compact-selector-card .color-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)) !important; }
+        }
+
+        @media (max-width: 1199px) {
+            .compact-product-layout { grid-template-columns: 1fr 1fr !important; }
+            .compact-selector-card { grid-template-rows: auto auto auto !important; }
+            .compact-selector-card .size-grid { max-height: none !important; }
+        }
+
+        @media (max-width: 767px) {
+            .compact-product-layout { grid-template-columns: 1fr !important; }
+            .compact-selector-card .size-grid,
+            .compact-selector-card .color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+
     </style>
 </head>
 <body>
@@ -1151,7 +1282,7 @@ if ($businessId <= 0) {
                                 <button type="button" class="pos-icon-btn primary" id="addCustomerBtn" title="Add customer"><i data-lucide="user-plus"></i></button>
                                 <div class="suggestion-list" id="customerSuggestions"></div>
                             </div>
-                            <div class="compact-hint text-start">Existing customer or new name can be used directly for this bill.</div>
+                            <div class="compact-hint text-start">Existing customer will be selected. New typed name is used as Walk-in for this bill only.</div>
                         </div>
 
                         <div class="compact-card compact-search-card">
@@ -1448,8 +1579,8 @@ if ($businessId <= 0) {
         <form class="modal-content" id="customerForm">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">Add New Customer</h5>
-                    <div class="pos-panel-sub">Auto-create customer for loyalty, outstanding and purchase history.</div>
+                    <h5 class="modal-title">Bill Customer</h5>
+                    <div class="pos-panel-sub">Create Bill will not add Customer Master records. Use Customer Master page to create regular customers.</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -1479,7 +1610,7 @@ if ($businessId <= 0) {
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light rounded-pill fw-bold" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn brand-gradient rounded-pill fw-bold">Save Customer</button>
+                <button type="submit" class="btn brand-gradient rounded-pill fw-bold">Use In Bill</button>
             </div>
         </form>
     </div>
@@ -2110,6 +2241,27 @@ if ($businessId <= 0) {
         return 'size-tone-' + (Math.abs(hash) % 14);
     }
 
+    function colorDotStyle(color) {
+        const text = String(color || '').toLowerCase().trim();
+        const map = [
+            { keys: ['black', 'blk'], bg: '#111827', border: '#111827' },
+            { keys: ['white'], bg: '#ffffff', border: '#cbd5e1' },
+            { keys: ['blue', 'navy'], bg: '#2563eb', border: '#1d4ed8' },
+            { keys: ['red', 'maroon'], bg: '#dc2626', border: '#b91c1c' },
+            { keys: ['green'], bg: '#16a34a', border: '#15803d' },
+            { keys: ['yellow'], bg: '#facc15', border: '#ca8a04' },
+            { keys: ['orange'], bg: '#f97316', border: '#ea580c' },
+            { keys: ['brown', 'tan'], bg: '#92400e', border: '#78350f' },
+            { keys: ['grey', 'gray', 'silver'], bg: '#94a3b8', border: '#64748b' },
+            { keys: ['pink'], bg: '#ec4899', border: '#db2777' },
+            { keys: ['purple', 'violet'], bg: '#7c3aed', border: '#6d28d9' }
+        ];
+        const found = map.find(function (row) { return row.keys.some(function (key) { return text.indexOf(key) !== -1; }); });
+        const bg = found ? found.bg : '#cbd5e1';
+        const border = found ? found.border : '#94a3b8';
+        return 'background:' + bg + ';border-color:' + border + ';';
+    }
+
     function renderBranches() {
         el.branchSelect.innerHTML = state.branches.map(function (branch) {
             return `<option value="${branch.branch_id}">${escapeHtml(branch.branch_name)} ${branch.floor_name ? '(' + escapeHtml(branch.floor_name) + ')' : ''}</option>`;
@@ -2178,29 +2330,63 @@ if ($businessId <= 0) {
     function renderProductOptions() {
         const selected = state.selectedProduct;
         if (!selected || !state.productOptions.length) {
+            el.sizeGrid.innerHTML = '<span class="size-chip disabled">Select product</span>';
+            el.colorGrid.innerHTML = '<span class="color-chip">Default</span>';
             return;
         }
 
-        const colors = {};
-        const sizes = [];
+        const selectedColor = selected.color || 'Default';
+        const colorMap = {};
         state.productOptions.forEach(function (item) {
-            colors[item.color || 'Default'] = true;
-            sizes.push(item);
+            const color = item.color || 'Default';
+            if (!colorMap[color]) {
+                colorMap[color] = { color: color, totalQty: 0, count: 0 };
+            }
+            colorMap[color].totalQty += toNumber(item.available_qty);
+            colorMap[color].count += 1;
         });
 
-        el.colorGrid.innerHTML = Object.keys(colors).map(function (color) {
-            const active = (selected.color || 'Default') === color ? 'active' : '';
-            return `<button type="button" class="color-chip ${active}" data-color="${escapeHtml(color)}"><span class="color-dot"></span>${escapeHtml(color)}</button>`;
-        }).join('');
+        const colorRows = Object.keys(colorMap).sort(function (a, b) {
+            if (a === selectedColor) return -1;
+            if (b === selectedColor) return 1;
+            return a.localeCompare(b);
+        }).map(function (color) { return colorMap[color]; });
 
-        el.sizeGrid.innerHTML = sizes.map(function (item, index) {
-            const active = Number(selected.stock_item_id) === Number(item.stock_item_id) ? 'active' : '';
-            const disabled = toNumber(item.available_qty) <= 0 ? 'disabled' : '';
-            const toneClass = sizeToneClass(item.stock_item_id || item.size || index, index);
-            return `<button type="button" class="size-chip ${toneClass} ${active} ${disabled}" data-stock-id="${item.stock_item_id}" title="Stock entry: ${escapeHtml(stockEntryDate(item) || '-')}">
-                <span class="size-main-text">${escapeHtml(item.size)}</span> <small>(${item.available_qty})</small>
+        el.colorGrid.innerHTML = colorRows.map(function (row) {
+            const active = selectedColor === row.color ? 'active' : '';
+            return `<button type="button" class="color-chip ${active}" data-color="${escapeHtml(row.color)}" title="${escapeHtml(row.color)} stock: ${toNumber(row.totalQty)}">
+                <span class="color-dot" style="${colorDotStyle(row.color)}"></span>
+                <span class="color-main-text">${escapeHtml(row.color)}</span>
+                <small>${toNumber(row.totalQty)}</small>
             </button>`;
         }).join('');
+
+        let visibleSizes = state.productOptions.filter(function (item) {
+            return (item.color || 'Default') === selectedColor;
+        });
+
+        if (!visibleSizes.length) {
+            visibleSizes = state.productOptions.slice();
+        }
+
+        visibleSizes.sort(function (a, b) {
+            const av = String(a.size || '').trim();
+            const bv = String(b.size || '').trim();
+            const an = parseFloat(av);
+            const bn = parseFloat(bv);
+            if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
+            return av.localeCompare(bv);
+        });
+
+        el.sizeGrid.innerHTML = visibleSizes.map(function (item, index) {
+            const active = Number(selected.stock_item_id) === Number(item.stock_item_id) ? 'active' : '';
+            const disabled = toNumber(item.available_qty) <= 0 ? 'disabled' : '';
+            const toneClass = sizeToneClass((item.size || '') + '-' + selectedColor, index);
+            return `<button type="button" class="size-chip ${toneClass} ${active} ${disabled}" data-stock-id="${item.stock_item_id}" title="Size ${escapeHtml(item.size || '-')} • ${escapeHtml(selectedColor)} • Stock ${toNumber(item.available_qty)} • Entry ${escapeHtml(stockEntryDate(item) || '-')}">
+                <span class="size-main-text">${escapeHtml(item.size || '-')}</span>
+                <small>${toNumber(item.available_qty)}</small>
+            </button>`;
+        }).join('') || '<span class="size-chip disabled">No size stock</span>';
     }
 
     function renderBillItems() {
@@ -2632,7 +2818,7 @@ if ($businessId <= 0) {
                     <div class="suggestion-img"><i data-lucide="users" style="width:16px;height:16px;"></i></div>
                     <div class="suggestion-content">
                         <div class="suggestion-name">No saved customers yet</div>
-                        <div class="suggestion-meta"><span>Type a new customer name/mobile and save the bill to auto-create.</span></div>
+                        <div class="suggestion-meta"><span>Type a customer name for walk-in bill or add mobile/details to save customer master.</span></div>
                     </div>
                 </div>`;
             }
@@ -2657,17 +2843,143 @@ if ($businessId <= 0) {
                 html += `<div class="suggestion-item is-create js-create-customer-from-search" title="Create new customer">
                     <div class="suggestion-img">+</div>
                     <div class="suggestion-content">
-                        <div class="suggestion-name">Create "${escapeHtml(query)}"</div>
-                        <div class="suggestion-meta"><span>New customer will also be auto-created when Save Bill is clicked.</span></div>
+                        <div class="suggestion-name">Use "${escapeHtml(query)}" in this bill</div>
+                        <div class="suggestion-meta"><span>New POS customer names stay Walk-in only. Customer Master records are created only from Customer Master.</span></div>
                     </div>
                 </div>`;
             }
 
             el.customerSuggestions.customers = customers;
+            el.customerSuggestions.allCustomers = allCustomers;
             el.customerSuggestions.innerHTML = html;
             el.customerSuggestions.style.display = 'block';
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {}
+    }
+
+    function selectedCustomerLabel(customer) {
+        customer = customer || {};
+        return (customer.customer_name || customer.name || 'Customer') + (customer.mobile ? ' - ' + customer.mobile : '');
+    }
+
+    function normalizeCustomerName(value) {
+        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function hasRegularCustomerDetails(customer) {
+        customer = customer || {};
+        return !!(normalizeMobile(customer.mobile || customer.customer_mobile || '')
+            || String(customer.email || '').trim()
+            || String(customer.gstin || '').trim()
+            || String(customer.address || '').trim());
+    }
+
+    function makeBillOnlyWalkInFromPayload(payload) {
+        payload = payload || {};
+        const name = String(payload.customer_name || payload.name || '').trim();
+        const mobile = normalizeMobile(payload.mobile || payload.customer_mobile || '');
+        const customer = makeWalkInCustomer(name || 'Walk-in Customer', mobile);
+        customer.email = String(payload.email || '').trim();
+        customer.gstin = String(payload.gstin || '').trim().toUpperCase();
+        customer.address = String(payload.address || '').trim();
+        return customer;
+    }
+
+    function makeWalkInCustomer(name, mobile) {
+        name = String(name || '').trim();
+        mobile = normalizeMobile(mobile || '');
+        if (!name || /^\d+$/.test(name)) { name = 'Walk-in Customer'; }
+        return {
+            customer_id: 0,
+            customer_name: name,
+            mobile: mobile,
+            is_walkin_customer: 1,
+            customer_source: 'walk_in',
+            save_to_master: 0,
+            visible_in_customer_master: 0,
+            outstanding_balance: 0,
+            loyalty_points: 0,
+            purchase_count: 0
+        };
+    }
+
+    function buildCustomerPayload() {
+        let customer = state.selectedCustomer ? Object.assign({}, state.selectedCustomer) : null;
+        if (!customer) {
+            const value = el.customerSearch.value.trim();
+            customer = makeWalkInCustomer(value || 'Walk-in Customer', normalizeMobile(value));
+        }
+
+        customer.customer_id = parseInt(customer.customer_id || 0, 10);
+        customer.customer_name = String(customer.customer_name || customer.name || 'Walk-in Customer').trim() || 'Walk-in Customer';
+        customer.mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
+
+        if (customer.customer_id > 0) {
+            customer.is_walkin_customer = 0;
+            customer.customer_source = 'master';
+            customer.save_to_master = 1;
+            customer.visible_in_customer_master = 1;
+        } else {
+            customer.is_walkin_customer = 1;
+            customer.customer_source = 'walk_in';
+            customer.save_to_master = 0;
+            customer.visible_in_customer_master = 0;
+        }
+
+        return customer;
+    }
+
+    async function findExactCustomer(customer) {
+        customer = customer || {};
+        const mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
+        const name = String(customer.customer_name || customer.name || '').trim();
+        const query = mobile || name;
+        if (!query) { return null; }
+
+        try {
+            const data = await apiGet({ action: 'search_customers', q: query, limit: 20 });
+            const rows = data.success ? (data.customers || []) : [];
+            const nameKey = normalizeCustomerName(name);
+            if (mobile) {
+                const byMobile = rows.find(function (row) { return normalizeMobile(row.mobile || row.customer_mobile || '') === mobile; });
+                if (byMobile) { return byMobile; }
+            }
+            if (nameKey) {
+                const byName = rows.find(function (row) { return normalizeCustomerName(row.customer_name || row.name || '') === nameKey; });
+                if (byName) { return byName; }
+            }
+        } catch (error) {}
+
+        return null;
+    }
+
+    async function prepareCustomerForSubmit() {
+        if (state.selectedCustomer && parseInt(state.selectedCustomer.customer_id || 0, 10) > 0) {
+            return state.selectedCustomer;
+        }
+
+        const value = el.customerSearch.value.trim();
+        if (!value) {
+            state.selectedCustomer = null;
+            return null;
+        }
+
+        const candidate = makeWalkInCustomer(value, normalizeMobile(value));
+        const existing = await findExactCustomer(candidate);
+        if (existing) {
+            state.selectedCustomer = existing;
+            el.customerSearch.value = selectedCustomerLabel(existing);
+            renderCustomer();
+            renderSummary();
+            persistCurrentBill();
+            return existing;
+        }
+
+        state.selectedCustomer = candidate;
+        renderCustomer();
+        renderSummary();
+        persistCurrentBill();
+        return candidate;
     }
 
     function setWalkInCustomer() {
@@ -2679,11 +2991,7 @@ if ($businessId <= 0) {
     }
 
     function buildPayload() {
-        const customer = state.selectedCustomer ? state.selectedCustomer : {
-            customer_id: 0,
-            customer_name: el.customerSearch.value.trim() || 'Walk-in Customer',
-            mobile: normalizeMobile(el.customerSearch.value)
-        };
+        const customer = buildCustomerPayload();
         const taxSummary = currentSummary();
 
         return {
@@ -2692,6 +3000,10 @@ if ($businessId <= 0) {
             workflow_type: state.workflowType || '',
             branch_id: state.branchId,
             customer: customer,
+            customer_is_walkin: customer.is_walkin_customer ? 1 : 0,
+            customer_source: customer.customer_source || (customer.customer_id > 0 ? 'master' : 'walk_in'),
+            save_customer_to_master: customer.save_to_master ? 1 : 0,
+            customer_display_name: customer.customer_name || 'Walk-in Customer',
             customer_notes: el.customerNotes.value.trim(),
             sales_notes: el.salesNotes.value.trim(),
             offer_code: el.offerCode.value.trim().toUpperCase(),
@@ -2754,6 +3066,7 @@ if ($businessId <= 0) {
             return;
         }
 
+        await prepareCustomerForSubmit();
         const payload = buildPayload();
         try {
             const data = await apiPost('save_bill', payload);
@@ -2788,6 +3101,7 @@ if ($businessId <= 0) {
         }
 
         try {
+            await prepareCustomerForSubmit();
             state.workflowType = type;
             const data = await apiPost(type === 'draft' ? 'save_draft' : 'save_hold', buildPayload());
             if (!data.success) {
@@ -2823,6 +3137,7 @@ if ($businessId <= 0) {
         }
         if (!confirm('Cancel this current bill? It will be recorded in Bill History.')) return;
         try {
+            await prepareCustomerForSubmit();
             state.workflowType = 'cancelled';
             const payload = buildPayload();
             payload.workflow_type = 'cancelled';
@@ -3029,12 +3344,34 @@ if ($businessId <= 0) {
 
     el.customerSearch.addEventListener('input', function () {
         clearTimeout(customerSearchTimer);
-        customerSearchTimer = setTimeout(function () { searchCustomers(el.customerSearch.value.trim()); }, 250);
+        const typed = el.customerSearch.value.trim();
+        if (state.selectedCustomer && typed !== selectedCustomerLabel(state.selectedCustomer)) {
+            state.selectedCustomer = null;
+            renderCustomer();
+            renderSummary();
+        }
+        customerSearchTimer = setTimeout(function () { searchCustomers(typed); }, 250);
         persistCurrentBill();
     });
 
     el.customerSearch.addEventListener('focus', function () {
         searchCustomers(el.customerSearch.value.trim());
+    });
+
+    el.customerSearch.addEventListener('keydown', async function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            await prepareCustomerForSubmit();
+            el.customerSuggestions.style.display = 'none';
+        }
+    });
+
+    el.customerSearch.addEventListener('blur', function () {
+        window.setTimeout(function () {
+            if (!state.selectedCustomer && el.customerSearch.value.trim()) {
+                prepareCustomerForSubmit();
+            }
+        }, 180);
     });
 
     el.branchSelect.addEventListener('change', async function () {
@@ -3064,7 +3401,7 @@ if ($businessId <= 0) {
             const c = (el.customerSuggestions.customers || []).find(x => Number(x.customer_id) === Number(id));
             if (c) {
                 state.selectedCustomer = c;
-                el.customerSearch.value = c.customer_name + (c.mobile ? ' - ' + c.mobile : '');
+                el.customerSearch.value = selectedCustomerLabel(c);
                 el.customerSuggestions.style.display = 'none';
                 renderCustomer();
                 renderSummary();
@@ -3074,6 +3411,7 @@ if ($businessId <= 0) {
 
         if (event.target.closest('.js-create-customer-from-search')) {
             const value = el.customerSearch.value.trim();
+            document.getElementById('customerForm').reset();
             document.getElementById('newCustomerName').value = /^\d+$/.test(value) ? '' : value;
             document.getElementById('newCustomerMobile').value = normalizeMobile(value);
             modal('customerModal').show();
@@ -3098,7 +3436,17 @@ if ($businessId <= 0) {
         const colorNode = event.target.closest('.color-chip[data-color]');
         if (colorNode) {
             const color = colorNode.dataset.color || 'Default';
-            const p = state.productOptions.find(x => (x.color || 'Default') === color) || state.selectedProduct;
+            const currentSize = state.selectedProduct ? String(state.selectedProduct.size || '') : '';
+            const sameSize = state.productOptions.find(function (x) {
+                return (x.color || 'Default') === color && String(x.size || '') === currentSize && toNumber(x.available_qty) > 0;
+            });
+            const firstActive = state.productOptions.find(function (x) {
+                return (x.color || 'Default') === color && toNumber(x.available_qty) > 0;
+            });
+            const firstAny = state.productOptions.find(function (x) {
+                return (x.color || 'Default') === color;
+            });
+            const p = sameSize || firstActive || firstAny || state.selectedProduct;
             if (p) {
                 state.selectedProduct = p;
                 renderProduct(p);
@@ -3208,7 +3556,13 @@ if ($businessId <= 0) {
     document.getElementById('addToBillBtn').addEventListener('click', function () { addSelectedProductToBill(); });
     document.getElementById('focusSearchBtn').addEventListener('click', function () { el.productSearch.focus(); });
     document.getElementById('walkInBtn').addEventListener('click', setWalkInCustomer);
-    document.getElementById('addCustomerBtn').addEventListener('click', function () { modal('customerModal').show(); });
+    document.getElementById('addCustomerBtn').addEventListener('click', function () {
+        const value = el.customerSearch.value.trim();
+        document.getElementById('customerForm').reset();
+        document.getElementById('newCustomerName').value = /^\d+$/.test(value) ? '' : value;
+        document.getElementById('newCustomerMobile').value = normalizeMobile(value);
+        modal('customerModal').show();
+    });
     document.getElementById('clearItemsBtn').addEventListener('click', function () {
         if (confirm('Clear all bill items?')) {
             state.items = [];
@@ -3276,19 +3630,29 @@ if ($businessId <= 0) {
         }
 
         try {
-            const data = await apiPost('save_customer', payload);
-            if (!data.success) {
-                showMessage('error', data.message || 'Customer save failed.');
+            const existing = await findExactCustomer(payload);
+            if (existing) {
+                state.selectedCustomer = existing;
+                el.customerSearch.value = selectedCustomerLabel(existing);
+                renderCustomer();
+                renderSummary();
+                persistCurrentBill();
+                modal('customerModal').hide();
+                event.target.reset();
+                showMessage('success', 'Existing customer selected. Duplicate customer not created.');
                 return;
             }
-            state.selectedCustomer = data.customer;
-            el.customerSearch.value = data.customer.customer_name + (data.customer.mobile ? ' - ' + data.customer.mobile : '');
+
+            // Create Bill must not create Customer Master records.
+            // Any new/non-existing customer entered here is saved only in the bill as a Walk-in customer.
+            state.selectedCustomer = makeBillOnlyWalkInFromPayload(payload);
+            el.customerSearch.value = selectedCustomerLabel(state.selectedCustomer);
             renderCustomer();
             renderSummary();
             persistCurrentBill();
             modal('customerModal').hide();
             event.target.reset();
-            showMessage('success', data.message || 'Customer saved.');
+            showMessage('success', 'Customer used as Walk-in for this bill only. Customer Master not created.');
         } catch (error) {
             showMessage('error', 'Unable to save customer.');
         }

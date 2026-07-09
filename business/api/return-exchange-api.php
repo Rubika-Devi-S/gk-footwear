@@ -373,12 +373,24 @@ function re_search_bill(mysqli $conn, int $businessId, string $search): array
 
 function re_search_products(mysqli $conn, int $businessId, string $search): array
 {
-    $term = '%' . trim($search) . '%';
+    $rawSearch = trim($search);
 
-    if (trim($search) === '') {
+    if ($rawSearch === '') {
         return [];
     }
 
+    $term = '%' . $rawSearch . '%';
+
+    /*
+     * Important fix:
+     * Return only stock rows that have at least one ACTIVE barcode.
+     * Earlier the product list could return a stock item without a valid active
+     * barcode_id. Then create_exchange posted new_barcode_id = 0 / stale id and
+     * the backend failed with: "Selected exchange product not found or no active barcode.".
+     *
+     * If the user scans an exact barcode, that exact active barcode is preferred.
+     * For normal article/name search, the first active barcode of that stock item is used.
+     */
     return re_rows($conn, "
         SELECT
             sii.stock_item_id,
@@ -394,15 +406,31 @@ function re_search_products(mysqli $conn, int $businessId, string $search): arra
             sii.available_qty,
             sii.selling_rate,
             sii.mrp_rate,
-            sb.barcode_id,
-            sb.barcode_value,
+            (
+                SELECT sbx.barcode_id
+                FROM stock_barcodes sbx
+                WHERE sbx.business_id = sii.business_id
+                  AND sbx.branch_id = sii.branch_id
+                  AND sbx.batch_id = sii.batch_id
+                  AND sbx.stock_item_id = sii.stock_item_id
+                  AND sbx.barcode_status = 'active'
+                ORDER BY CASE WHEN sbx.barcode_value = ? THEN 0 ELSE 1 END, sbx.barcode_id ASC
+                LIMIT 1
+            ) AS barcode_id,
+            (
+                SELECT sbx.barcode_value
+                FROM stock_barcodes sbx
+                WHERE sbx.business_id = sii.business_id
+                  AND sbx.branch_id = sii.branch_id
+                  AND sbx.batch_id = sii.batch_id
+                  AND sbx.stock_item_id = sii.stock_item_id
+                  AND sbx.barcode_status = 'active'
+                ORDER BY CASE WHEN sbx.barcode_value = ? THEN 0 ELSE 1 END, sbx.barcode_id ASC
+                LIMIT 1
+            ) AS barcode_value,
             br.branch_name,
             br.floor_name
         FROM stock_inward_items sii
-        LEFT JOIN stock_barcodes sb
-            ON sb.business_id = sii.business_id
-           AND sb.stock_item_id = sii.stock_item_id
-           AND sb.barcode_status = 'active'
         LEFT JOIN brands b
             ON b.business_id = sii.business_id
            AND b.brand_id = sii.brand_id
@@ -412,18 +440,55 @@ function re_search_products(mysqli $conn, int $businessId, string $search): arra
         WHERE sii.business_id = ?
           AND sii.item_status = 'active'
           AND sii.available_qty > 0
+          AND EXISTS (
+              SELECT 1
+              FROM stock_barcodes sb_active
+              WHERE sb_active.business_id = sii.business_id
+                AND sb_active.branch_id = sii.branch_id
+                AND sb_active.batch_id = sii.batch_id
+                AND sb_active.stock_item_id = sii.stock_item_id
+                AND sb_active.barcode_status = 'active'
+          )
           AND (
             sii.article_no LIKE ?
             OR sii.article_name LIKE ?
             OR sii.size LIKE ?
             OR sii.color LIKE ?
             OR b.brand_name LIKE ?
-            OR sb.barcode_value LIKE ?
+            OR EXISTS (
+                SELECT 1
+                FROM stock_barcodes sb_search
+                WHERE sb_search.business_id = sii.business_id
+                  AND sb_search.branch_id = sii.branch_id
+                  AND sb_search.batch_id = sii.batch_id
+                  AND sb_search.stock_item_id = sii.stock_item_id
+                  AND sb_search.barcode_status = 'active'
+                  AND sb_search.barcode_value LIKE ?
+            )
           )
-        GROUP BY sii.stock_item_id
-        ORDER BY sii.article_no ASC, sii.size ASC
-        LIMIT 20
-    ", 'issssss', [$businessId, $term, $term, $term, $term, $term, $term]);
+        ORDER BY
+            CASE
+                WHEN sii.article_no = ? THEN 0
+                WHEN sii.article_no LIKE ? THEN 1
+                WHEN sii.article_name LIKE ? THEN 2
+                ELSE 3
+            END,
+            sii.stock_item_id DESC
+        LIMIT 30
+    ", 'ssisssssssss', [
+        $rawSearch,
+        $rawSearch,
+        $businessId,
+        $term,
+        $term,
+        $term,
+        $term,
+        $term,
+        $term,
+        $rawSearch,
+        $term,
+        $term
+    ]);
 }
 
 function re_history(mysqli $conn, int $businessId, int $billId): array
@@ -443,6 +508,28 @@ function re_history(mysqli $conn, int $businessId, int $billId): array
         ORDER BY reh.return_exchange_id DESC
     ", 'ii', [$businessId, $billId]);
 }
+
+function re_recent_history(mysqli $conn, int $businessId, int $limit = 20): array
+{
+    $nameExpr = re_user_name_expr();
+    $limit = max(1, min(100, $limit));
+
+    $sql = "
+        SELECT
+            reh.*,
+            $nameExpr AS created_by_name
+        FROM return_exchange_headers reh
+        LEFT JOIN users u
+            ON u.business_id = reh.business_id
+           AND u.user_id = reh.created_by
+        WHERE reh.business_id = ?
+        ORDER BY reh.return_exchange_id DESC
+        LIMIT {$limit}
+    ";
+
+    return re_rows($conn, $sql, 'i', [$businessId]);
+}
+
 
 function re_bill_item(mysqli $conn, int $businessId, int $billId, int $billItemId): array
 {
@@ -482,16 +569,28 @@ function re_bill_item(mysqli $conn, int $businessId, int $billId, int $billItemI
 
 function re_stock_item(mysqli $conn, int $businessId, int $stockItemId, int $barcodeId = 0): array
 {
-    $whereBarcode = '';
+    if ($stockItemId <= 0) {
+        throw new RuntimeException('Invalid exchange product selected.');
+    }
+
+    $barcodeFilter = '';
     $types = 'ii';
     $params = [$businessId, $stockItemId];
 
     if ($barcodeId > 0) {
-        $whereBarcode = ' AND sb.barcode_id = ?';
+        $barcodeFilter = ' AND sb.barcode_id = ?';
         $types .= 'i';
         $params[] = $barcodeId;
     }
 
+    /*
+     * Important fix:
+     * Use INNER JOIN for active barcode and bind parameters in the same order as
+     * the placeholders. The older query placed the barcode placeholder before
+     * business_id/stock_item_id inside the JOIN, but passed params as
+     * business_id, stock_item_id, barcode_id. That mismatch caused valid selected
+     * products to fail with "Selected exchange product not found or no active barcode.".
+     */
     $item = re_one($conn, "
         SELECT
             sii.*,
@@ -499,27 +598,54 @@ function re_stock_item(mysqli $conn, int $businessId, int $stockItemId, int $bar
             sb.barcode_id,
             sb.barcode_value
         FROM stock_inward_items sii
+        INNER JOIN stock_barcodes sb
+            ON sb.business_id = sii.business_id
+           AND sb.branch_id = sii.branch_id
+           AND sb.batch_id = sii.batch_id
+           AND sb.stock_item_id = sii.stock_item_id
+           AND sb.barcode_status = 'active'
         LEFT JOIN brands b
             ON b.business_id = sii.business_id
            AND b.brand_id = sii.brand_id
-        LEFT JOIN stock_barcodes sb
-            ON sb.business_id = sii.business_id
-           AND sb.stock_item_id = sii.stock_item_id
-           AND sb.barcode_status = 'active'
-           $whereBarcode
         WHERE sii.business_id = ?
           AND sii.stock_item_id = ?
           AND sii.item_status = 'active'
+          {$barcodeFilter}
         ORDER BY sb.barcode_id ASC
         LIMIT 1
     ", $types, $params);
 
+    /*
+     * If the frontend sent a stale barcode_id that became used/cancelled after
+     * search, use the next available active barcode for the same stock item.
+     */
+    if (!$item && $barcodeId > 0) {
+        return re_stock_item($conn, $businessId, $stockItemId, 0);
+    }
+
     if (!$item) {
-        throw new RuntimeException('Selected exchange product not found or no active barcode.');
+        $stockOnly = re_one($conn, "
+            SELECT article_no, article_name, available_qty
+            FROM stock_inward_items
+            WHERE business_id = ?
+              AND stock_item_id = ?
+              AND item_status = 'active'
+            LIMIT 1
+        ", 'ii', [$businessId, $stockItemId]);
+
+        if ($stockOnly) {
+            throw new RuntimeException('Selected exchange product has stock, but no active barcode is available. Please generate/activate barcode in Stock Inward or Stock List.');
+        }
+
+        throw new RuntimeException('Selected exchange product not found.');
     }
 
     if ((float)$item['available_qty'] <= 0) {
         throw new RuntimeException('Selected exchange product has no available stock.');
+    }
+
+    if (empty($item['barcode_id'])) {
+        throw new RuntimeException('Selected exchange product has no active barcode.');
     }
 
     return $item;
@@ -1032,6 +1158,11 @@ try {
         if ($action === 'search_products') {
             $products = re_search_products($conn, $businessId, (string)($_GET['search'] ?? ''));
             re_json(['success' => true, 'products' => $products]);
+        }
+
+        if ($action === 'recent_history') {
+            $limit = (int)($_GET['limit'] ?? 20);
+            re_json(['success' => true, 'history' => re_recent_history($conn, $businessId, $limit)]);
         }
 
         if ($action === 'history') {

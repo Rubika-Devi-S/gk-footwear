@@ -474,22 +474,115 @@ $permissions = customer_page_permissions($conn, 'customers.php');
     }
     .purchase-scroll { max-height: 430px; overflow: auto; }
     .ledger-scroll { max-height: 260px; overflow: auto; }
-    .qr-mini {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        display: inline-grid;
-        place-items: center;
-        background: repeating-linear-gradient(45deg, #0f172a 0 2px, #fff 2px 4px);
-        border: 1px solid #cbd5e1;
-        overflow: hidden;
-        flex: 0 0 28px;
-    }
-    .qr-card {
-        display: flex;
+    /* Real barcode preview for Customer module - same method used in Stock List */
+    .customer-barcode-cell { min-width: 0; }
+    .customer-barcode-chip {
+        width: 100%;
+        max-width: 154px;
+        border: 1px solid #bae6fd;
+        background: linear-gradient(135deg, #f8fbff, #ecfeff);
+        color: #0f172a;
+        border-radius: 12px;
+        padding: 5px 6px;
+        display: inline-flex;
         align-items: center;
-        gap: 7px;
-        min-width: 150px;
+        gap: 6px;
+        box-shadow: 0 6px 14px rgba(14, 116, 144, .08);
+        overflow: hidden;
+        vertical-align: middle;
+    }
+    .customer-barcode-preview {
+        flex: 1 1 auto;
+        min-width: 58px;
+        max-width: 86px;
+        overflow: hidden;
+        background: #ffffff;
+        border-radius: 7px;
+        padding: 2px 3px;
+        border: 1px solid #dbeafe;
+    }
+    .customer-barcode-svg-mini,
+    .customer-barcode-svg-card {
+        width: 100%;
+        display: block;
+    }
+    .customer-barcode-svg-mini { height: 22px; }
+    .customer-barcode-code-wrap {
+        flex: 0 0 auto;
+        min-width: 46px;
+        max-width: 60px;
+        overflow: hidden;
+    }
+    .customer-barcode-code {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: .01em;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+    .customer-barcode-extra {
+        display: inline-flex;
+        margin-top: 3px;
+        font-size: 8.5px;
+        font-weight: 850;
+        border-radius: 999px;
+        padding: 2px 5px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        line-height: 1;
+    }
+    .customer-barcode-empty {
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #64748b;
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: 10px;
+        font-weight: 750;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    .customer-barcode-card {
+        min-width: 190px;
+        max-width: 240px;
+        border: 1px solid #bae6fd;
+        background: linear-gradient(135deg, #f0f9ff, #ecfeff);
+        border-radius: 14px;
+        padding: 7px 8px;
+        display: grid;
+        gap: 4px;
+        box-shadow: 0 6px 14px rgba(14, 116, 144, .08);
+    }
+    .customer-barcode-card .customer-barcode-svg-card {
+        height: 34px;
+        background: #fff;
+        border: 1px solid #dbeafe;
+        border-radius: 8px;
+        padding: 2px 3px;
+    }
+    .customer-barcode-card .customer-barcode-text {
+        display: block;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .03em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #0f172a;
+    }
+    .customer-barcode-card .customer-barcode-note {
+        display: block;
+        text-align: center;
+        font-size: 9px;
+        color: #0369a1;
+        font-weight: 800;
     }
     .live-note {
         border: 1px dashed #bfdbfe;
@@ -581,7 +674,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
                             <col style="width:9%;">
                             <col style="width:11%;">
                             <col style="width:7%;">
-                            <col style="width:8%;">
+                            <col style="width:12%;">
                             <col style="width:10%;">
                             <col style="width:6%;">
                             <col style="width:7%;">
@@ -595,7 +688,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
                             <th>Purchased Articles</th>
                             <th>Latest Article</th>
                             <th>Latest Stock</th>
-                            <th>Latest QR</th>
+                            <th>Latest Barcode</th>
                             <th>Outstanding</th>
                             <th>Loyalty</th>
                             <th>Status</th>
@@ -713,8 +806,116 @@ $permissions = customer_page_permissions($conn, 'customers.php');
     function statusBadge(status) { return parseInt(status, 10) === 1 ? '<span class="mp-badge status-active">Active</span>' : '<span class="mp-badge status-inactive">Inactive</span>'; }
     function paymentBadge(status) { const s = String(status || 'pending').toLowerCase(); const cls = s === 'paid' ? 'status-active' : (s === 'partial' ? 'badge-count' : 'status-inactive'); return '<span class="mp-badge ' + cls + '">' + escapeHtml(s.charAt(0).toUpperCase() + s.slice(1)) + '</span>'; }
     function stockBadge(value) { const stock = toNumber(value); let cls = 'badge-stock-empty'; if (stock > 5) cls = 'badge-stock'; else if (stock > 0) cls = 'badge-stock-low'; return '<span class="mp-badge ' + cls + '">' + stock.toFixed(2) + '</span>'; }
-    function qrContent(qrCode) { const value = String(qrCode || '').trim(); if (!value) return '<span class="mp-badge badge-qr">No QR</span>'; return '<span class="mp-badge badge-qr" title="' + escapeHtml(value) + '"><span class="qr-mini"></span> ' + escapeHtml(value) + '</span>'; }
-    function qrCard(qrCode) { const value = String(qrCode || '').trim(); if (!value) return '<span class="mp-badge badge-qr">No QR / Barcode</span>'; return '<div class="qr-card"><span class="qr-mini"></span><div><div class="mp-title">' + escapeHtml(value) + '</div><div class="mp-sub">From stock_barcodes</div></div></div>'; }
+    function normalizeBarcodeList(value) {
+        const text = String(value || '').trim();
+        if (!text || text === '-' || text.toLowerCase() === 'no qr' || text.toLowerCase() === 'no barcode') return [];
+        const seen = {};
+        return text
+            .split(/[|,\n]+/)
+            .map(function (v) { return v.trim(); })
+            .filter(function (v) {
+                if (!v || seen[v]) return false;
+                seen[v] = true;
+                return true;
+            });
+    }
+
+    function customerBarcodeValue(item) {
+        item = item || {};
+        const candidates = [
+            item.latest_qr_code,
+            item.qr_code,
+            item.barcode_values,
+            item.barcode_value,
+            item.stock_barcode,
+            item.generated_barcode
+        ];
+        for (let i = 0; i < candidates.length; i++) {
+            const value = String(candidates[i] || '').trim();
+            if (value && value !== '-' && value.toLowerCase() !== 'no qr' && value.toLowerCase() !== 'no barcode') return value;
+        }
+        return '';
+    }
+
+    function code128Svg(value, className, height) {
+        value = String(value || '').trim();
+        if (!value) return '';
+
+        const patterns = [
+            '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+            '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+            '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+            '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+            '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+            '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+            '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+            '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+            '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+            '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+            '114131','311141','411131','211412','211214','211232','2331112'
+        ];
+
+        const codes = [104];
+        let checksum = 104;
+        let position = 1;
+
+        for (let i = 0; i < value.length; i++) {
+            let ord = value.charCodeAt(i);
+            if (ord < 32 || ord > 126) ord = 32;
+            const code = ord - 32;
+            codes.push(code);
+            checksum += code * position;
+            position++;
+        }
+
+        codes.push(checksum % 103);
+        codes.push(106);
+
+        const moduleWidth = 1.45;
+        const quiet = 10;
+        let x = quiet;
+        let bars = '';
+
+        codes.forEach(function (code) {
+            const pattern = patterns[code] || patterns[0];
+            let black = true;
+            for (let i = 0; i < pattern.length; i++) {
+                const width = parseInt(pattern.charAt(i), 10) * moduleWidth;
+                if (black) {
+                    bars += '<rect x="' + x.toFixed(2) + '" y="0" width="' + width.toFixed(2) + '" height="' + height + '" fill="#000"/>';
+                }
+                x += width;
+                black = !black;
+            }
+        });
+
+        const totalWidth = x + quiet;
+        return '<svg class="' + escapeHtml(className || 'customer-barcode-svg-mini') + '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + totalWidth.toFixed(2) + ' ' + height + '" preserveAspectRatio="none">' + bars + '</svg>';
+    }
+
+    function qrContent(qrCode) {
+        const list = normalizeBarcodeList(qrCode);
+        if (!list.length) return '<span class="customer-barcode-empty"><i data-lucide="barcode" style="width:12px;height:12px"></i> No Barcode</span>';
+        const first = list[0];
+        const all = list.join(', ');
+        const extra = list.length > 1 ? '<span class="customer-barcode-extra">+' + (list.length - 1) + '</span>' : '';
+        return '<span class="customer-barcode-chip" title="' + escapeHtml(all) + '">' +
+            '<span class="customer-barcode-preview">' + code128Svg(first, 'customer-barcode-svg-mini', 26) + '</span>' +
+            '<span class="customer-barcode-code-wrap"><span class="customer-barcode-code">' + escapeHtml(first) + '</span>' + extra + '</span>' +
+            '</span>';
+    }
+
+    function qrCard(qrCode) {
+        const list = normalizeBarcodeList(qrCode);
+        if (!list.length) return '<span class="customer-barcode-empty"><i data-lucide="barcode" style="width:12px;height:12px"></i> No Barcode</span>';
+        const first = list[0];
+        const extraText = list.length > 1 ? ' + ' + (list.length - 1) + ' more' : '';
+        return '<div class="customer-barcode-card" title="' + escapeHtml(list.join(', ')) + '">' +
+            code128Svg(first, 'customer-barcode-svg-card', 38) +
+            '<span class="customer-barcode-text">' + escapeHtml(first) + '</span>' +
+            '<span class="customer-barcode-note">From stock_barcodes' + escapeHtml(extraText) + '</span>' +
+            '</div>';
+    }
 
     function getCustomerModal() { if (window.bootstrap && window.bootstrap.Modal) { if (!customerModalInstance) customerModalInstance = new window.bootstrap.Modal(customerModalEl, { backdrop: 'static', keyboard: false }); return customerModalInstance; } return null; }
     function getDetailModal() { if (window.bootstrap && window.bootstrap.Modal) { if (!detailModalInstance) detailModalInstance = new window.bootstrap.Modal(detailModalEl); return detailModalInstance; } return null; }
@@ -923,7 +1124,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
                 <td><span class="mp-badge badge-code">${articleCount} Articles</span><div class="mp-sub">Qty ${qty}</div></td>
                 <td><span class="mp-badge badge-type" title="${escapeHtml(latest)}">${escapeHtml(latest)}</span></td>
                 <td>${stockBadge(customer.latest_available_qty)}</td>
-                <td>${qrContent(customer.latest_qr_code)}</td>
+                <td>${qrContent(customerBarcodeValue(customer))}</td>
                 <td><div class="fw-bold ${toNumber(customer.current_outstanding) > 0 ? 'amount-due' : 'amount-good'}">${currentOutstanding}</div><div class="mp-sub">Opening ${money.format(toNumber(customer.opening_outstanding))}</div></td>
                 <td class="fw-bold">${loyaltyPoints}</td>
                 <td>${statusBadge(customer.status)}</td>
@@ -937,7 +1138,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
             return `<div class="mp-mobile-card">
                 <div class="d-flex gap-2"><div class="mp-avatar">${customerInitial(customer.customer_name)}</div><div class="flex-grow-1 min-width-0">
                     <div class="d-flex justify-content-between gap-2"><div><div class="mp-title">${escapeHtml(customer.customer_name)}</div><div class="mp-sub">${escapeHtml(customer.mobile || '-')}</div></div>${statusBadge(customer.status)}</div>
-                    <div class="d-flex flex-wrap gap-1 mt-2"><span class="mp-badge badge-count">${parseInt(customer.bill_count || 0, 10)} Bills</span>${pendingBillCount(customer) > 0 ? '<span class="pending-bill-chip">Status: Pending</span>' : ''}<span class="mp-badge badge-code">${parseInt(customer.purchased_article_count || 0, 10)} Articles</span>${stockBadge(customer.latest_available_qty)}${qrContent(customer.latest_qr_code)}</div>
+                    <div class="d-flex flex-wrap gap-1 mt-2"><span class="mp-badge badge-count">${parseInt(customer.bill_count || 0, 10)} Bills</span>${pendingBillCount(customer) > 0 ? '<span class="pending-bill-chip">Status: Pending</span>' : ''}<span class="mp-badge badge-code">${parseInt(customer.purchased_article_count || 0, 10)} Articles</span>${stockBadge(customer.latest_available_qty)}${qrContent(customerBarcodeValue(customer))}</div>
                     <div class="mp-sub mt-2" title="${escapeHtml(latest)}">Latest: ${escapeHtml(latest)}</div>
                     <div class="fw-bold mt-1">Outstanding: ${money.format(toNumber(customer.current_outstanding))}</div>
                     <div class="mp-sub">Qty Purchased: ${toNumber(customer.total_purchased_qty).toFixed(2)} · Loyalty: ${toNumber(customer.loyalty_points).toFixed(2)}</div>
@@ -951,7 +1152,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
 
     function renderPurchaseRows(rows) {
         if (!rows || !rows.length) return '<div class="text-muted small p-3">No purchased articles found for this customer.</div>';
-        return '<div class="purchase-scroll table-responsive"><table class="table mp-table mb-0"><thead><tr><th>Bill</th><th>Article / Product</th><th>Brand</th><th>Colour</th><th>Size</th><th>Qty Purchased</th><th>Current Available</th><th>Remaining After Sales</th><th>QR Code</th><th>Amount</th></tr></thead><tbody>' +
+        return '<div class="purchase-scroll table-responsive"><table class="table mp-table mb-0"><thead><tr><th>Bill</th><th>Article / Product</th><th>Brand</th><th>Colour</th><th>Size</th><th>Qty Purchased</th><th>Current Available</th><th>Remaining After Sales</th><th>Barcode</th><th>Amount</th></tr></thead><tbody>' +
             rows.map(function (row) {
                 const billText = (row.bill_no || '-') + '<div class="mp-sub">' + escapeHtml(row.bill_date || '-') + (row.bill_time ? ' · ' + escapeHtml(row.bill_time) : '') + '</div>';
                 const product = '<div class="mp-title">' + escapeHtml(row.article_no || '-') + '</div><div class="mp-sub">' + escapeHtml(row.article_name || '-') + '</div>';
@@ -964,7 +1165,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
                     '<td class="fw-bold">' + toNumber(row.purchased_qty).toFixed(2) + '</td>' +
                     '<td>' + stockBadge(row.current_available_stock) + '</td>' +
                     '<td><div class="fw-bold">' + toNumber(row.remaining_stock_after_previous_sales).toFixed(2) + '</div><div class="mp-sub">Sold from batch ' + toNumber(row.sold_from_stock_qty).toFixed(2) + ' / Original ' + toNumber(row.original_stock_qty).toFixed(2) + '</div></td>' +
-                    '<td>' + qrCard(row.qr_code) + '</td>' +
+                    '<td>' + qrCard(customerBarcodeValue(row)) + '</td>' +
                     '<td><strong>' + money.format(toNumber(row.amount)) + '</strong><div class="mp-sub">Rate ' + money.format(toNumber(row.selling_rate)) + '</div></td>' +
                 '</tr>';
             }).join('') + '</tbody></table></div>';
@@ -1066,7 +1267,7 @@ $permissions = customer_page_permissions($conn, 'customers.php');
                 detailBox('Loyalty Points', toNumber(c.loyalty_points).toFixed(2)) +
             '</div>' +
             '<div class="live-note mt-3">This section is loaded live from bills, bill_items, stock_inward_items, stock_barcodes and customer ledger. It does not use manual or dummy customer product data.</div>' +
-            '<h6 class="fw-bold mt-4 mb-2">Purchased Articles, Colour, Size, Quantity, Stock and QR Code</h6>' + renderPurchaseRows(purchases) +
+            '<h6 class="fw-bold mt-4 mb-2">Purchased Articles, Colour, Size, Quantity, Stock and Barcode</h6>' + renderPurchaseRows(purchases) +
             '<h6 class="fw-bold mt-4 mb-2">Customer Bills</h6>' + renderBillRows(data.bills || []) +
             '<h6 class="fw-bold mt-4 mb-2">Customer Ledger</h6>' + renderLedgerRows(data.ledger || []);
             if (window.lucide) window.lucide.createIcons();

@@ -78,7 +78,7 @@ if ($businessId <= 0) { die('Business session missing. Please login again.'); }
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button" id="scanQrBtn" class="scan-qr-btn"><i data-lucide="scan-line" style="width:14px;height:14px;"></i> Scan Barcode</button>
-                        <a href="collections.php" class="btn btn-outline-success"><i data-lucide="wallet-cards" style="width:14px;height:14px;"></i> Collections</a>
+                        <a href="cashier-collections.php" class="btn btn-outline-success"><i data-lucide="wallet-cards" style="width:14px;height:14px;"></i> Collections</a>
                         <a href="bill-list.php" class="btn btn-outline-primary"><i data-lucide="list" style="width:14px;height:14px;"></i> Bill List</a>
                         <button type="button" id="resetPage" class="btn btn-outline-secondary"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Reset</button>
                     </div>
