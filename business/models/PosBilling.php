@@ -814,4 +814,73 @@ class PosBilling
             $this->execute("INSERT INTO activity_logs (business_id, branch_id, user_id, role_id, module_name, action_type, record_id, old_value, new_value, ip_address, device_details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NOW())", 'iiiississs', array($businessId, $branchId, $userId, $roleId, $module, $action, $recordId, $json, $ip, $ua));
         }
     }
+
+    // ============================================
+    // NEW: GET BILL FOR PRINT - Added for direct reprint
+    // ============================================
+    public function getBillForPrint($businessId, $branchId, $billId)
+    {
+        if (!$this->tableExists('bills')) {
+            return null;
+        }
+        
+        $bill = $this->fetchOne(
+            "SELECT b.*, br.branch_name, br.floor_name, u.name AS created_by_name 
+             FROM bills b 
+             LEFT JOIN branches br ON br.branch_id = b.branch_id AND br.business_id = b.business_id 
+             LEFT JOIN users u ON u.user_id = b.created_by AND u.business_id = b.business_id 
+             WHERE b.business_id = ? AND b.branch_id = ? AND b.bill_id = ? 
+             LIMIT 1",
+            'iii', 
+            array($businessId, $branchId, $billId)
+        );
+        
+        if (!$bill) {
+            return null;
+        }
+        
+        if ($this->tableExists('bill_barcodes')) {
+            $barcode = $this->fetchOne(
+                "SELECT barcode_value FROM bill_barcodes WHERE business_id = ? AND branch_id = ? AND bill_id = ? ORDER BY bill_barcode_id DESC LIMIT 1",
+                'iii',
+                array($businessId, $branchId, $billId)
+            );
+            if ($barcode) {
+                $bill['bill_barcode'] = $barcode['barcode_value'];
+            }
+        }
+        
+        $items = array();
+        if ($this->tableExists('bill_items')) {
+            $items = $this->fetchAll(
+                "SELECT bi.*, sii.color, sii.size, sii.article_name 
+                 FROM bill_items bi
+                 LEFT JOIN stock_inward_items sii ON sii.stock_item_id = bi.stock_item_id AND sii.business_id = bi.business_id
+                 WHERE bi.business_id = ? AND bi.branch_id = ? AND bi.bill_id = ? 
+                 ORDER BY bi.bill_item_id ASC",
+                'iii',
+                array($businessId, $branchId, $billId)
+            );
+        }
+        
+        $payments = array();
+        if ($this->tableExists('bill_payments')) {
+            $payments = $this->fetchAll(
+                "SELECT bp.*, pm.payment_method_name, pm.method_type, u.name AS cashier_name
+                 FROM bill_payments bp
+                 LEFT JOIN payment_methods pm ON pm.payment_method_id = bp.payment_method_id AND pm.business_id = bp.business_id
+                 LEFT JOIN users u ON u.user_id = bp.collected_by AND u.business_id = bp.business_id
+                 WHERE bp.business_id = ? AND bp.branch_id = ? AND bp.bill_id = ?
+                 ORDER BY bp.collected_at DESC",
+                'iii',
+                array($businessId, $branchId, $billId)
+            );
+        }
+        
+        return array(
+            'bill' => $bill,
+            'items' => $items,
+            'payments' => $payments
+        );
+    }
 }

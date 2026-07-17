@@ -74,8 +74,10 @@ if ($businessId <= 0) {
         body { margin: 0; background: var(--pos-bg); overflow: hidden; }
         .pos-page { height: 100vh; min-height: 100vh; font-family: "Inter", "Segoe UI", Arial, sans-serif; color: var(--pos-text); font-size: 12px; font-weight: 650; display: flex; flex-direction: column; }
         .pos-topbar { min-height: var(--pos-header-height); background: rgba(255, 255, 255, .94); backdrop-filter: blur(18px); border-bottom: 1px solid var(--pos-border); padding: 9px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 22px rgba(15, 23, 42, .06); z-index: 20; }
-        .pos-back-btn { width: 42px; height: 42px; border: 0; border-radius: 15px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--pos-brand-1), var(--pos-brand-2)); box-shadow: 0 10px 22px rgba(37, 99, 235, .25); text-decoration: none; }
         .pos-title-wrap { min-width: 185px; }
+        .pos-close-btn { width: 42px; height: 42px; border: 0; border-radius: 15px; display: grid; place-items: center; color: #b91c1c; background: #fee2e2; box-shadow: 0 10px 22px rgba(185, 28, 28, .12); text-decoration: none; flex: 0 0 42px; margin-left: 2px; }
+        .pos-close-btn:hover { color: #ffffff; background: linear-gradient(135deg, #ef4444, #b91c1c); }
+        .pos-close-btn svg { width: 21px; height: 21px; stroke-width: 3; }
         .pos-title { font-size: 20px; font-weight: 950; margin: 0; letter-spacing: -.03em; line-height: 1.05; }
         .pos-subtitle { color: var(--pos-muted); font-size: 10.5px; margin-top: 2px; line-height: 1.2; white-space: nowrap; }
         .pos-header-grid { flex: 1; display: grid; grid-template-columns: minmax(168px, 1.1fr) minmax(115px, .8fr) minmax(122px, .75fr) minmax(148px, .9fr); gap: 8px; align-items: center; min-width: 0; }
@@ -116,7 +118,6 @@ if ($businessId <= 0) {
         .pos-search-box { border: 2px solid rgba(37, 99, 235, .18); background: #f8fbff; border-radius: 16px; padding: 8px; display: flex; align-items: center; gap: 8px; position: relative; }
         .pos-search-box input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; font-size: 13px; font-weight: 850; }
         .pos-scan-btn { border: 0; border-radius: 13px; min-width: 38px; height: 38px; color: #fff; background: linear-gradient(135deg, #0f172a, #334155); display: grid; place-items: center; }
-        /* Modern responsive customer/product search dropdown */
         .pos-product-panel { position: relative; z-index: 35; overflow: visible; }
         .pos-product-body, .pos-product-body .pos-panel-body { overflow: visible; }
         .compact-card, .pos-customer-bar, .pos-search-box { position: relative; overflow: visible; }
@@ -230,7 +231,7 @@ if ($businessId <= 0) {
         .qty-control button { border: 0; border-radius: 13px; background: #e2e8f0; font-size: 16px; font-weight: 950; }
         .add-bill-btn { position: relative; border: 0; border-radius: 22px; min-height: 46px; color: #fff; font-size: 13px; font-weight: 950; overflow: hidden; isolation: isolate; background: linear-gradient(135deg, #16a34a 0%, #22c55e 45%, #0ea5e9 100%); box-shadow: 0 18px 34px rgba(22, 163, 74, .34), inset 0 -2px 0 rgba(255,255,255,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; text-align: center; transform: translateZ(0); transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
         .add-bill-btn::before { content: ''; position: absolute; inset: -1px; background: linear-gradient(120deg, transparent 0%, transparent 36%, rgba(255,255,255,.38) 48%, transparent 60%, transparent 100%); transform: translateX(-130%); animation: addBillShine 2.6s infinite; z-index: -1; }
-        .add-bill-btn::after { content: ''; position: absolute; inset: 9px; border: 1px solid rgba(255,255,255,.32); border-radius: 18px; pointer-events: none; }
+        .add-bill-btn::after { display: none !important; }
         .add-bill-btn:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 24px 46px rgba(22, 163, 74, .42), 0 0 0 5px rgba(34, 197, 94, .12); filter: saturate(1.08); }
         .add-bill-btn:active { transform: translateY(0) scale(.99); }
         .add-bill-icon { width: 38px; height: 38px; border-radius: 15px; background: rgba(255,255,255,.22); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.24), 0 9px 20px rgba(0,0,0,.16); animation: addBillPulse 1.7s infinite; }
@@ -387,6 +388,8 @@ if ($businessId <= 0) {
             .pos-page { min-height: 100vh; height: auto; }
             .pos-topbar { flex-wrap: wrap; }
             .pos-title-wrap { flex: 1 1 180px; }
+            .pos-close-btn { order: 2; width: 38px; height: 38px; flex-basis: 38px; border-radius: 13px; }
+            .pos-header-grid { order: 3; }
             .pos-header-grid { flex: 1 1 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .pos-shell { height: auto; grid-template-columns: 1fr; }
             .pos-workspace { grid-template-rows: auto auto; }
@@ -399,7 +402,7 @@ if ($businessId <= 0) {
         }
         @media (max-width: 767px) {
             .pos-topbar { padding: 8px; gap: 8px; }
-            .pos-back-btn { width: 38px; height: 38px; border-radius: 13px; }
+            .pos-close-btn { width: 38px; height: 38px; flex-basis: 38px; border-radius: 13px; }
             .pos-title { font-size: 17px; }
             .pos-subtitle { white-space: normal; }
             .pos-header-grid { grid-template-columns: 1fr; }
@@ -425,7 +428,6 @@ if ($businessId <= 0) {
             .customer-mini-stats { width: 100%; justify-content: flex-start; margin-left: 0; }
             .bill-customer-card { align-items:flex-start; flex-wrap: wrap; }
         }
-
         @media (max-width: 767px) {
             .suggestion-list {
                 max-height: 52vh;
@@ -436,74 +438,56 @@ if ($businessId <= 0) {
             .suggestion-stock { min-width: 64px; padding: 5px 6px; font-size: 9px; }
             .suggestion-meta { font-size: 9.4px; gap: 2px 6px; }
         }
-
-        /* =========================================================
-           FINAL COMPACT FIX - PRODUCT SELECTION HEIGHT REDUCED
-           Added for POS Step 1 compact full-screen billing layout
-           ========================================================= */
-
         .pos-redesigned-shell {
             padding: 10px !important;
             gap: 10px !important;
         }
-
         .pos-workspace {
             gap: 9px !important;
         }
-
         .pos-product-panel {
             flex: 0 0 auto !important;
         }
-
         .pos-product-panel .pos-panel-head {
             padding: 8px 12px !important;
             min-height: 52px !important;
         }
-
         .pos-product-panel .pos-panel-title-row {
             gap: 6px !important;
         }
-
         .pos-product-panel .pos-step-badge {
             min-width: 46px !important;
             height: 20px !important;
             font-size: 8px !important;
         }
-
         .pos-product-panel .pos-panel-title {
             font-size: 14px !important;
             line-height: 1.1 !important;
         }
-
         .pos-product-panel .pos-panel-sub {
             font-size: 9.5px !important;
             line-height: 1.15 !important;
             margin-top: 1px !important;
         }
-
         .pos-product-panel #focusSearchBtn {
             width: 34px !important;
             height: 34px !important;
             border-radius: 12px !important;
         }
-
         .pos-product-panel .pos-panel-body {
             padding: 8px 10px 10px !important;
         }
-
         .compact-product-layout {
             grid-template-columns: minmax(230px, 1.05fr) minmax(310px, 1.25fr) minmax(165px, .62fr) minmax(300px, 1.18fr) !important;
             gap: 7px !important;
             align-items: stretch !important;
         }
-
         .compact-card {
             padding: 7px 8px !important;
             gap: 6px !important;
             border-radius: 14px !important;
             min-height: 106px !important;
         }
-
         .compact-card-title {
             min-height: 15px !important;
             font-size: 10px !important;
@@ -512,112 +496,93 @@ if ($businessId <= 0) {
             gap: 6px !important;
             margin: 0 !important;
         }
-
         .compact-card-sub {
             font-size: 8.8px !important;
             line-height: 1 !important;
         }
-
         .compact-hint {
             font-size: 8.4px !important;
             line-height: 1.15 !important;
             margin: 0 !important;
         }
-
         .compact-customer-card .pos-customer-bar {
             min-height: 36px !important;
             padding: 4px 5px 4px 8px !important;
             border-radius: 12px !important;
             gap: 5px !important;
         }
-
         .compact-customer-card .pos-customer-bar input {
             font-size: 11px !important;
         }
-
         .compact-customer-card .pos-icon-btn {
             width: 30px !important;
             height: 30px !important;
             flex: 0 0 30px !important;
             border-radius: 10px !important;
         }
-
         .compact-search-card .pos-search-box {
             min-height: 36px !important;
             padding: 4px 5px !important;
             border-radius: 13px !important;
             gap: 6px !important;
         }
-
         .compact-search-card .pos-search-box input {
             font-size: 11.2px !important;
         }
-
         .compact-search-card .pos-scan-btn {
             min-width: 32px !important;
             width: 32px !important;
             height: 31px !important;
             border-radius: 10px !important;
         }
-
         .compact-product-preview,
         .compact-search-card .product-preview {
             min-height: 54px !important;
             grid-template-columns: 54px minmax(0, 1fr) !important;
             border-radius: 13px !important;
         }
-
         .compact-product-preview .product-preview-img,
         .compact-search-card .product-preview-img {
             min-height: 54px !important;
             font-size: 18px !important;
         }
-
         .compact-search-card .product-preview-info {
             padding: 6px 7px !important;
             gap: 2px !important;
             justify-content: center !important;
         }
-
         .compact-search-card .product-name {
             font-size: 12px !important;
             line-height: 1.08 !important;
             margin: 0 !important;
         }
-
         .compact-search-card .product-meta-line {
             font-size: 8.8px !important;
             line-height: 1.12 !important;
         }
-
         .compact-search-card .stock-badge {
             padding: 3px 6px !important;
             font-size: 8.3px !important;
             line-height: 1 !important;
         }
-
         .compact-selector-card {
             padding: 7px !important;
             gap: 5px !important;
         }
-
         .compact-selector-group {
             min-height: auto !important;
         }
-
         .compact-selector-group .pos-label {
             font-size: 8.5px !important;
             margin-bottom: 3px !important;
             line-height: 1 !important;
         }
-
         .compact-selector-card .size-grid,
         .compact-selector-card .color-grid {
             gap: 4px !important;
             max-height: 44px !important;
             overflow-y: auto !important;
         }
-
         .compact-selector-card .size-chip,
         .compact-selector-card .color-chip {
             min-height: 22px !important;
@@ -625,30 +590,25 @@ if ($businessId <= 0) {
             font-size: 8.8px !important;
             line-height: 1 !important;
         }
-
         .compact-entry-card {
             padding: 7px !important;
             gap: 6px !important;
             transform: none !important;
             max-width: 100% !important;
         }
-
         .compact-field-grid {
             grid-template-columns: minmax(94px, 1.05fr) minmax(76px, .8fr) minmax(82px, .85fr) !important;
             gap: 5px !important;
         }
-
         .price-entry-box {
             padding: 5px !important;
             border-radius: 11px !important;
             gap: 3px !important;
         }
-
         .price-entry-box .pos-label {
             font-size: 8.5px !important;
             line-height: 1 !important;
         }
-
         .compact-entry-card .pos-input,
         .price-entry-box .pos-input {
             min-height: 29px !important;
@@ -657,24 +617,20 @@ if ($businessId <= 0) {
             font-size: 10.5px !important;
             border-radius: 9px !important;
         }
-
         .compact-entry-card .qty-control {
             grid-template-columns: 27px minmax(34px, 1fr) 27px !important;
             gap: 3px !important;
         }
-
         .compact-entry-card .qty-control button {
             min-height: 29px !important;
             height: 29px !important;
             border-radius: 9px !important;
             font-size: 14px !important;
         }
-
         .compact-inline-add {
             margin-top: 0 !important;
             gap: 3px !important;
         }
-
         .compact-inline-add .add-bill-btn {
             min-height: 37px !important;
             height: 37px !important;
@@ -682,89 +638,66 @@ if ($businessId <= 0) {
             border-radius: 12px !important;
             gap: 7px !important;
         }
-
         .compact-inline-add .add-bill-icon {
             width: 25px !important;
             height: 25px !important;
             border-radius: 9px !important;
             flex: 0 0 25px !important;
         }
-
         .compact-inline-add .add-bill-icon svg {
             width: 16px !important;
             height: 16px !important;
         }
-
         .compact-inline-add .add-bill-title {
             font-size: 11.5px !important;
             line-height: 1 !important;
         }
-
         .compact-inline-add .add-bill-sub {
             font-size: 8px !important;
             line-height: 1 !important;
         }
-
         .pos-bill-panel .pos-panel-head {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
         }
-
         @media (max-width: 1599px) {
             .compact-product-layout {
                 grid-template-columns: minmax(220px, 1fr) minmax(285px, 1.2fr) minmax(150px, .62fr) minmax(285px, 1.15fr) !important;
                 gap: 6px !important;
             }
-
             .compact-card-sub {
                 display: none !important;
             }
-
             .compact-card {
                 padding: 7px !important;
             }
-
             .compact-field-grid {
                 grid-template-columns: minmax(88px, 1fr) minmax(70px, .78fr) minmax(76px, .82fr) !important;
             }
         }
-
         @media (max-width: 1199px) {
             .compact-product-layout {
                 grid-template-columns: 1fr 1fr !important;
             }
-
             .compact-card {
                 min-height: auto !important;
             }
         }
-
         @media (max-width: 767px) {
             .pos-redesigned-shell {
                 padding: 8px !important;
             }
-
             .compact-product-layout {
                 grid-template-columns: 1fr !important;
             }
-
             .compact-field-grid {
                 grid-template-columns: 1fr !important;
             }
-
             .compact-inline-add .add-bill-btn {
                 height: 42px !important;
                 min-height: 42px !important;
             }
         }
-
-
-        /* =========================================================
-           BILL ITEMS HEADER CUSTOMER FIX
-           Customer details moved to Step 2 header. Old customer card
-           below the header removed to avoid extra highlighted row.
-           ========================================================= */
-
         .pos-bill-panel > .pos-panel-head {
             display: grid !important;
             grid-template-columns: minmax(220px, .85fr) minmax(360px, 1.4fr) auto !important;
@@ -772,11 +705,9 @@ if ($businessId <= 0) {
             gap: 10px !important;
             padding: 8px 12px !important;
         }
-
         .bill-items-title-wrap {
             min-width: 0;
         }
-
         .bill-header-customer-card {
             min-width: 0;
             width: 100%;
@@ -789,7 +720,6 @@ if ($businessId <= 0) {
             padding: 6px 8px;
             overflow: hidden;
         }
-
         .bill-header-customer-card .bill-header-avatar {
             width: 34px;
             height: 34px;
@@ -797,13 +727,11 @@ if ($businessId <= 0) {
             border-radius: 13px;
             font-size: 12px;
         }
-
         .bill-header-customer-main {
             min-width: 120px;
             flex: 1 1 auto;
             overflow: hidden;
         }
-
         .bill-header-customer-card .customer-name {
             font-size: 13px;
             line-height: 1.12;
@@ -811,7 +739,6 @@ if ($businessId <= 0) {
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
         .bill-header-customer-card .customer-meta {
             font-size: 9.5px;
             line-height: 1.1;
@@ -819,7 +746,6 @@ if ($businessId <= 0) {
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
         .bill-header-customer-card .customer-mini-stats {
             margin-left: auto;
             display: flex;
@@ -830,56 +756,46 @@ if ($businessId <= 0) {
             flex-wrap: nowrap;
             min-width: 0;
         }
-
         .bill-header-customer-card .mini-stat {
             padding: 4px 7px;
             font-size: 9px;
             line-height: 1;
             white-space: nowrap;
         }
-
         .bill-header-actions {
             justify-content: flex-end;
             min-width: max-content;
         }
-
         .pos-bill-panel .pos-panel-body {
             padding-top: 8px !important;
         }
-
         @media (max-width: 1499px) {
             .pos-bill-panel > .pos-panel-head {
                 grid-template-columns: minmax(190px, .8fr) minmax(300px, 1.25fr) auto !important;
                 gap: 8px !important;
             }
-
             .bill-header-customer-card .mini-stat {
                 padding: 4px 6px;
                 font-size: 8.6px;
             }
         }
-
         @media (max-width: 1199px) {
             .pos-bill-panel > .pos-panel-head {
                 grid-template-columns: 1fr !important;
                 align-items: stretch !important;
             }
-
             .bill-header-actions {
                 justify-content: flex-start;
             }
         }
-
         @media (max-width: 767px) {
             .bill-header-customer-card {
                 align-items: flex-start;
                 flex-wrap: wrap;
             }
-
             .bill-header-customer-main {
                 min-width: calc(100% - 46px);
             }
-
             .bill-header-customer-card .customer-mini-stats {
                 width: 100%;
                 margin-left: 0;
@@ -887,16 +803,6 @@ if ($businessId <= 0) {
                 flex-wrap: wrap;
             }
         }
-
-
-
-
-        /* =========================================================
-           PRODUCT SUGGESTION STOCK DATE + SIZE COLOR FIX
-           Blue/green size chips and separate stock entry date chip.
-           ========================================================= */
-
-        /* Different color for every size + slightly bigger size text */
         .size-chip[class*="size-tone-"] {
             min-height: 28px !important;
             padding: 6px 10px !important;
@@ -905,20 +811,17 @@ if ($businessId <= 0) {
             font-weight: 950 !important;
             letter-spacing: .01em !important;
         }
-
         .size-chip[class*="size-tone-"] .size-main-text {
             font-size: 13px !important;
             font-weight: 1000 !important;
             line-height: 1 !important;
         }
-
         .size-chip[class*="size-tone-"] small {
             font-size: 9.5px !important;
             font-weight: 950 !important;
             opacity: .92 !important;
             margin-left: 2px !important;
         }
-
         .size-chip.size-tone-0 { border-color: rgba(37, 99, 235, .32) !important; background: #eff6ff !important; color: #1d4ed8 !important; }
         .size-chip.size-tone-1 { border-color: rgba(22, 163, 74, .32) !important; background: #f0fdf4 !important; color: #15803d !important; }
         .size-chip.size-tone-2 { border-color: rgba(245, 158, 11, .36) !important; background: #fffbeb !important; color: #b45309 !important; }
@@ -933,7 +836,6 @@ if ($businessId <= 0) {
         .size-chip.size-tone-11 { border-color: rgba(5, 150, 105, .34) !important; background: #ecfdf5 !important; color: #047857 !important; }
         .size-chip.size-tone-12 { border-color: rgba(147, 51, 234, .32) !important; background: #faf5ff !important; color: #7e22ce !important; }
         .size-chip.size-tone-13 { border-color: rgba(225, 29, 72, .30) !important; background: #fff1f2 !important; color: #be123c !important; }
-
         .size-chip.size-tone-0.active { background: linear-gradient(135deg, #2563eb, #0ea5e9) !important; }
         .size-chip.size-tone-1.active { background: linear-gradient(135deg, #16a34a, #22c55e) !important; }
         .size-chip.size-tone-2.active { background: linear-gradient(135deg, #f59e0b, #f97316) !important; }
@@ -948,20 +850,17 @@ if ($businessId <= 0) {
         .size-chip.size-tone-11.active { background: linear-gradient(135deg, #059669, #10b981) !important; }
         .size-chip.size-tone-12.active { background: linear-gradient(135deg, #9333ea, #c084fc) !important; }
         .size-chip.size-tone-13.active { background: linear-gradient(135deg, #e11d48, #fb7185) !important; }
-
         .size-chip[class*="size-tone-"].active {
             color: #ffffff !important;
             border-color: transparent !important;
             box-shadow: 0 8px 18px rgba(15, 23, 42, .18) !important;
         }
-
         .size-chip[class*="size-tone-"].disabled {
             opacity: .48 !important;
             color: #64748b !important;
             background: #f1f5f9 !important;
             border-color: #cbd5e1 !important;
         }
-
         .suggestion-title-line {
             display: flex;
             align-items: flex-start;
@@ -969,12 +868,10 @@ if ($businessId <= 0) {
             gap: 8px;
             min-width: 0;
         }
-
         .suggestion-title-line .suggestion-name {
             flex: 1 1 auto;
             min-width: 0;
         }
-
         .stock-entry-date-chip {
             width: fit-content;
             max-width: 100%;
@@ -991,16 +888,13 @@ if ($businessId <= 0) {
             line-height: 1;
             white-space: nowrap;
         }
-
         .stock-entry-date-chip.in-suggestion {
             flex: 0 0 auto;
             margin-top: 0;
         }
-
         .stock-entry-date-row {
             margin-top: 4px !important;
         }
-
         .suggestion-size-date-line {
             display: flex !important;
             align-items: center !important;
@@ -1008,7 +902,6 @@ if ($businessId <= 0) {
             gap: 5px !important;
             margin-top: 5px !important;
         }
-
         .stock-entry-date-chip.in-suggestion-line {
             border-color: rgba(124, 58, 237, .28);
             background: linear-gradient(135deg, #f5f3ff, #ede9fe);
@@ -1016,37 +909,28 @@ if ($businessId <= 0) {
             padding: 4px 8px;
             font-size: 9px;
         }
-
         .stock-entry-date-chip.entry-date-missing {
             border-color: rgba(100, 116, 139, .22);
             background: #f8fafc;
             color: #64748b;
         }
-
         .stock-entry-date-chip.in-preview {
             margin-top: 1px;
         }
-
         .stock-entry-date-chip .date-label {
             color: #7c3aed;
             opacity: .76;
             text-transform: uppercase;
             letter-spacing: .045em;
         }
-
         @media (max-width: 767px) {
             .suggestion-title-line {
                 flex-wrap: wrap;
             }
-
             .stock-entry-date-chip.in-suggestion {
                 margin-left: 0;
             }
         }
-
-
-
-
         .size-mini[class*="size-tone-"] {
             display: inline-flex;
             align-items: center;
@@ -1058,7 +942,6 @@ if ($businessId <= 0) {
             border: 1px solid currentColor;
             background: rgba(255, 255, 255, .68);
         }
-
         .size-mini.size-tone-0 { color: #1d4ed8; }
         .size-mini.size-tone-1 { color: #15803d; }
         .size-mini.size-tone-2 { color: #b45309; }
@@ -1073,25 +956,16 @@ if ($businessId <= 0) {
         .size-mini.size-tone-11 { color: #047857; }
         .size-mini.size-tone-12 { color: #7e22ce; }
         .size-mini.size-tone-13 { color: #be123c; }
-
         @media print {
             body * { visibility: hidden !important; }
             #printArea, #printArea * { visibility: visible !important; }
             #printArea { position: absolute; left: 0; top: 0; width: 100%; }
             .modal-backdrop { display:none !important; }
         }
-
-
-        /* =========================================================
-           FINAL SIZE & COLOR RESPONSIVE FIX
-           Keeps Size-wise Stock and Color inside the same model/card.
-           Filters size chips by selected color and avoids overflow.
-           ========================================================= */
         .compact-product-layout {
             grid-template-columns: minmax(235px, .95fr) minmax(330px, 1.25fr) minmax(245px, .82fr) minmax(300px, 1.05fr) !important;
             align-items: stretch !important;
         }
-
         .compact-selector-card {
             min-width: 0 !important;
             overflow: hidden !important;
@@ -1099,18 +973,15 @@ if ($businessId <= 0) {
             grid-template-rows: auto minmax(0, 1fr) auto !important;
             align-content: start !important;
         }
-
         .compact-selector-card .compact-card-title {
             margin-bottom: 1px !important;
         }
-
         .compact-selector-group {
             min-width: 0 !important;
             overflow: hidden !important;
             display: flex !important;
             flex-direction: column !important;
         }
-
         .compact-selector-card .size-grid {
             display: grid !important;
             grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)) !important;
@@ -1122,7 +993,6 @@ if ($businessId <= 0) {
             align-content: start !important;
             scrollbar-width: thin;
         }
-
         .compact-selector-card .color-grid {
             display: grid !important;
             grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)) !important;
@@ -1132,7 +1002,6 @@ if ($businessId <= 0) {
             padding: 1px !important;
             align-content: start !important;
         }
-
         .compact-selector-card .size-chip,
         .compact-selector-card .color-chip {
             width: 100% !important;
@@ -1150,13 +1019,11 @@ if ($businessId <= 0) {
             text-overflow: ellipsis !important;
             line-height: 1 !important;
         }
-
         .compact-selector-card .size-chip .size-main-text {
             font-size: 13px !important;
             font-weight: 1000 !important;
             line-height: 1 !important;
         }
-
         .compact-selector-card .size-chip small,
         .compact-selector-card .color-chip small {
             flex: 0 0 auto !important;
@@ -1165,32 +1032,27 @@ if ($businessId <= 0) {
             opacity: .9 !important;
             margin: 0 !important;
         }
-
         .compact-selector-card .color-chip .color-main-text {
             min-width: 0 !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
-
         .compact-selector-card .color-chip.active {
             color: #fff !important;
             background: linear-gradient(135deg, var(--pos-brand-1), var(--pos-brand-2)) !important;
             border-color: transparent !important;
             box-shadow: 0 8px 18px rgba(37, 99, 235, .20) !important;
         }
-
         .compact-selector-card .color-chip.active small,
         .compact-selector-card .color-chip.active .color-main-text {
             color: #fff !important;
         }
-
         .compact-selector-card .color-dot {
             flex: 0 0 12px !important;
             width: 12px !important;
             height: 12px !important;
             box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .18) !important;
         }
-
         @media (max-width: 1599px) {
             .compact-product-layout {
                 grid-template-columns: minmax(220px, .92fr) minmax(300px, 1.15fr) minmax(225px, .86fr) minmax(285px, 1fr) !important;
@@ -1198,19 +1060,16 @@ if ($businessId <= 0) {
             .compact-selector-card .size-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)) !important; max-height: 92px !important; }
             .compact-selector-card .color-grid { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)) !important; }
         }
-
         @media (max-width: 1199px) {
             .compact-product-layout { grid-template-columns: 1fr 1fr !important; }
             .compact-selector-card { grid-template-rows: auto auto auto !important; }
             .compact-selector-card .size-grid { max-height: none !important; }
         }
-
         @media (max-width: 767px) {
             .compact-product-layout { grid-template-columns: 1fr !important; }
             .compact-selector-card .size-grid,
             .compact-selector-card .color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
-
     </style>
 </head>
 <body>
@@ -1221,10 +1080,6 @@ if ($businessId <= 0) {
     <form id="posSecurityForm" class="d-none"><?= pos_csrf_field() ?></form>
 
     <header class="pos-topbar">
-        <a href="bill-list.php" class="pos-back-btn" title="Back to bill-list">
-            <i data-lucide="arrow-left"></i>
-        </a>
-
         <div class="pos-title-wrap">
             <h1 class="pos-title">Create Bill</h1>
             <div class="pos-subtitle">Full-screen footwear POS • fast billing</div>
@@ -1254,6 +1109,10 @@ if ($businessId <= 0) {
             </div>
 
         </div>
+
+        <a href="bill-list.php" class="pos-close-btn" title="Close Create Bill" aria-label="Close Create Bill">
+            <i data-lucide="x"></i>
+        </a>
     </header>
 
     <main class="pos-shell pos-redesigned-shell">
@@ -1411,9 +1270,7 @@ if ($businessId <= 0) {
                             </button>
                             <div class="dropdown-menu dropdown-menu-end" aria-labelledby="billActionMenuBtn">
                                 <button type="button" class="dropdown-item" id="holdBillBtn"><i data-lucide="pause"></i> Hold Bill</button>
-                                <button type="button" class="dropdown-item" id="draftBtn"><i data-lucide="file-clock"></i> Save as Draft</button>
                                 <button type="button" class="dropdown-item" id="cancelBillBtn"><i data-lucide="x-circle"></i> Cancel Bill</button>
-                                <button type="button" class="dropdown-item" id="returnBillBtn"><i data-lucide="rotate-ccw"></i> Return Bill</button>
                                 <div class="dropdown-divider"></div>
                                 <button type="button" class="dropdown-item text-danger" id="clearItemsBtn"><i data-lucide="trash-2"></i> Clear Items</button>
                             </div>
@@ -1564,7 +1421,6 @@ if ($businessId <= 0) {
                     <div class="action-grid">
                         <button type="button" class="pos-action success wide" id="savePrintBtn"><i data-lucide="printer"></i> Save & Print</button>
                         <button type="button" class="pos-action primary" id="saveBillBtn"><i data-lucide="save"></i> Save Bill</button>
-                        <button type="button" class="pos-action dark" id="previewBtn"><i data-lucide="eye"></i> Preview</button>
                         <button type="button" class="pos-action light" id="printBtn"><i data-lucide="printer-check"></i> Reprint</button>
                         <button type="button" class="pos-action light wide" id="newBillBtn"><i data-lucide="file-plus-2"></i> New Bill</button>
                     </div>
@@ -1721,6 +1577,10 @@ if ($businessId <= 0) {
         workflowType: '',
         lastSavedBill: null,
         lastSavedBillId: 0,
+        lastSavedItems: [],
+        lastSavedCustomerName: 'Walk-in Customer',
+        lastSavedBranchName: '',
+        previewBill: null,
         scannerStream: null,
         scannerTimer: null
     };
@@ -1793,6 +1653,72 @@ if ($businessId <= 0) {
         scannerVideo: document.getElementById('scannerVideo'),
         manualScanInput: document.getElementById('manualScanInput')
     };
+
+    // ============================================
+    // THERMAL PRINT SERVICE
+    // ============================================
+    const THERMAL_PRINT_URL = 'http://127.0.0.1:17900/';
+
+    function buildThermalPrintData(bill, items, customerName, branchName) {
+        bill = bill || {};
+        items = Array.isArray(items) ? items : [];
+
+        const grandTotal = toNumber(bill.net_amount ?? bill.grand_total ?? 0);
+        const paid = toNumber(bill.paid_amount ?? 0);
+        const balance = toNumber(bill.balance_amount ?? Math.max(0, grandTotal - paid));
+
+        return {
+            ShopName: (state.business && (state.business.business_name || state.business.name)) || 'GK FOOTWEAR',
+            Address: (state.business && state.business.address) || 'Gandhi Nagar, Krishnagiri.',
+            InvoiceTitle: bill.invoice_title || (state.invoiceSettings && state.invoiceSettings.invoice_title) || 'BILL OF SUPPLY',
+            BillNo: bill.bill_no || state.billNo || '',
+            OrderNo: bill.order_no || ('ORD-' + (bill.bill_no || state.billNo || '')),
+            Date: bill.bill_date || new Date().toLocaleDateString('en-IN'),
+            Time: bill.bill_time || new Date().toLocaleTimeString('en-IN'),
+            Customer: bill.customer_name || customerName || 'Walk-in Customer',
+            Branch: bill.branch_name || branchName || getSelectedBranchName(),
+            Salesman: salesUserName || 'Sales User',
+            PaymentStatus: String(bill.payment_status || 'PENDING').toUpperCase(),
+            GrandTotal: grandTotal,
+            Paid: paid,
+            Balance: balance,
+            Barcode: bill.bill_barcode || bill.barcode_value || state.billBarcode || bill.bill_no || '',
+            Items: items.map(function (item) {
+                return {
+                    Name: item.article_name || item.name || 'Item',
+                    Description: [item.article_no, item.brand_name, item.size ? ('Size ' + item.size) : ''].filter(Boolean).join(' / '),
+                    Qty: toNumber(item.qty),
+                    Rate: toNumber(item.selling_rate || item.rate)
+                };
+            })
+        };
+    }
+
+    async function printViaThermalService(printData) {
+        try {
+            const response = await fetch(THERMAL_PRINT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(printData)
+            });
+            const text = await response.text();
+            if (text && text.indexOf('PRINT SUCCESS') !== -1) {
+                showMessage('success', 'Bill sent to thermal printer.');
+                return true;
+            }
+            showMessage('warning', 'Printer response: ' + (text || 'unknown.'));
+            return false;
+        } catch (error) {
+            showMessage('warning', 'Unable to reach the thermal print app on this device. Make sure it is running (http://127.0.0.1:17900/).');
+            return false;
+        }
+    }
+
+    async function reprintBillThermal(bill, items, customerName, branchName) {
+        const printData = buildThermalPrintData(bill, items, customerName, branchName);
+        printData.PrintType = 'CREATE_BILL';
+        return printViaThermalService(printData);
+    }
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -1872,11 +1798,6 @@ if ($businessId <= 0) {
         if (keys.some(function (key) { return ['non_gst', 'no_gst', 'gst_off', 'off', 'none', 'disabled'].includes(key); })) {
             return false;
         }
-
-        /*
-         * If GST settings are not explicit, keep the GST option available.
-         * This allows cashier to use the bill-level GST ON/OFF button.
-         */
         return true;
     }
 
@@ -1906,8 +1827,6 @@ if ($businessId <= 0) {
         return { systemOn: systemOn, gstOn: gstOn };
     }
 
-    /* Persist current bill items in this browser so refresh will not remove products.
-       The draft is removed only by Clear Items or after a successful completed/save workflow. */
     let billRestoreInProgress = false;
 
     function currentBillStorageKey(branchId) {
@@ -1926,12 +1845,10 @@ if ($businessId <= 0) {
         if (billRestoreInProgress) return;
         try {
             const key = currentBillStorageKey();
-
             if (!state.items.length) {
                 window.localStorage.removeItem(key);
                 return;
             }
-
             const splitPayments = [];
             document.querySelectorAll('.split-amount').forEach(function (input) {
                 splitPayments.push({
@@ -1940,7 +1857,6 @@ if ($businessId <= 0) {
                     reference_no: (document.querySelector('.split-ref[data-method-id="' + input.dataset.methodId + '"]') || {}).value || ''
                 });
             });
-
             const payload = {
                 saved_at: Date.now(),
                 branch_id: state.branchId,
@@ -1963,7 +1879,6 @@ if ($businessId <= 0) {
                 single_payment_ref: el.singlePaymentRef.value || '',
                 split_payments: splitPayments
             };
-
             window.localStorage.setItem(key, JSON.stringify(payload));
         } catch (error) {}
     }
@@ -1972,15 +1887,12 @@ if ($businessId <= 0) {
         try {
             const raw = window.localStorage.getItem(currentBillStorageKey());
             if (!raw) return false;
-
             const saved = JSON.parse(raw);
             const savedItems = Array.isArray(saved.items) ? saved.items : [];
             if (!savedItems.length || Number(saved.branch_id || 0) !== Number(state.branchId || 0)) {
                 return false;
             }
-
             billRestoreInProgress = true;
-
             state.items = savedItems.map(function (item) {
                 item.qty = Math.max(1, toNumber(item.qty || 1));
                 item.available_qty = Math.max(item.qty, toNumber(item.available_qty || item.qty || 1));
@@ -1988,11 +1900,9 @@ if ($businessId <= 0) {
                 item.selling_rate = toNumber(item.selling_rate);
                 return item;
             });
-
             state.selectedCustomer = saved.selected_customer || null;
             state.paymentMode = saved.payment_mode || state.paymentMode || 'cash';
             state.selectedPaymentMethodId = saved.selected_payment_method_id || state.selectedPaymentMethodId || 0;
-
             el.customerSearch.value = saved.customer_search || (state.selectedCustomer ? (state.selectedCustomer.customer_name + (state.selectedCustomer.mobile ? ' - ' + state.selectedCustomer.mobile : '')) : '');
             el.billDiscountType.value = saved.bill_discount_type || 'none';
             el.billDiscountValue.value = toNumber(saved.bill_discount_value || 0).toFixed(2);
@@ -2005,18 +1915,15 @@ if ($businessId <= 0) {
             el.salesNotes.value = saved.sales_notes || '';
             el.singlePaidAmount.value = '0.00';
             el.singlePaymentRef.value = saved.single_payment_ref || '';
-
             renderPaymentMethods();
             el.singlePaymentBox.classList.toggle('d-none', state.paymentMode === 'split');
             el.splitPaymentBox.classList.toggle('d-none', state.paymentMode !== 'split');
-
             (saved.split_payments || []).forEach(function (payment) {
                 const amountInput = document.querySelector('.split-amount[data-method-id="' + payment.method_id + '"]');
                 const refInput = document.querySelector('.split-ref[data-method-id="' + payment.method_id + '"]');
                 if (amountInput) amountInput.value = payment.amount || '0.00';
                 if (refInput) refInput.value = payment.reference_no || '';
             });
-
             renderCustomer();
             renderBillItems();
             renderSummary();
@@ -2080,7 +1987,7 @@ if ($businessId <= 0) {
         const beforeRound = net + gstAmount;
         const grand = Math.round(beforeRound);
         const roundOff = roundMoney(grand - beforeRound);
-        const paid = currentPaidAmount(grand);
+        const paid = 0;
         const balance = Math.max(0, grand - paid);
 
         return {
@@ -2110,7 +2017,6 @@ if ($businessId <= 0) {
     }
 
     function currentPaidAmount(grand) {
-        // POS creation does not accept payment. Always keep the bill pending.
         return 0;
     }
 
@@ -2119,20 +2025,16 @@ if ($businessId <= 0) {
         return escapeHtml((name.substring(0, 2) || 'GK').toUpperCase());
     }
 
-
     function parseCompactDate(value, allowPlainText) {
         const raw = String(value || '').trim();
         if (!raw) return '';
-
         let match = raw.match(/(20\d{2})[-\/\.](0?[1-9]|1[0-2])[-\/\.](0?[1-9]|[12]\d|3[01])/);
         if (!match) {
             match = raw.match(/(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])/);
         }
-
         if (!match) {
             return allowPlainText ? (raw.length > 18 ? raw.substring(0, 18) : raw) : '';
         }
-
         const year = match[1];
         const month = String(match[2]).padStart(2, '0');
         const day = String(match[3]).padStart(2, '0');
@@ -2140,7 +2042,6 @@ if ($businessId <= 0) {
         if (Number.isNaN(date.getTime())) {
             return day + '-' + month + '-' + year;
         }
-
         return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     }
 
@@ -2187,10 +2088,8 @@ if ($businessId <= 0) {
             product.batch,
             product.item
         ]);
-
         const formattedDirect = parseCompactDate(directDate, false);
         if (formattedDirect) return formattedDirect;
-
         const barcodeDate = parseCompactDate(compactDateCandidate([
             product.barcode_value,
             product.barcode_values,
@@ -2221,15 +2120,12 @@ if ($businessId <= 0) {
     }
 
     function sizeToneClass(value, forcedIndex) {
-        // forcedIndex is used in visible lists so every size chip gets a different color,
-        // even when the same size appears more than once with different stock entries.
         if (forcedIndex !== undefined && forcedIndex !== null && forcedIndex !== '') {
             const n = parseInt(forcedIndex, 10);
             if (!Number.isNaN(n)) {
                 return 'size-tone-' + (Math.abs(n) % 14);
             }
         }
-
         const text = String(value === undefined || value === null ? '' : value).trim();
         let hash = 0;
         if (text) {
@@ -2280,7 +2176,6 @@ if ($businessId <= 0) {
             el.customerHistory.textContent = 'History 0';
             return;
         }
-
         const name = c.customer_name || c.name || 'Customer';
         el.selectedCustomerName.textContent = name;
         el.selectedCustomerMeta.textContent = (c.mobile || 'No mobile') + (c.email ? ' • ' + c.email : '');
@@ -2306,10 +2201,8 @@ if ($businessId <= 0) {
             el.discountValue.value = '0.00';
             return;
         }
-
         const stockClass = product.available_qty <= 0 ? 'stock-no' : (product.low_stock ? 'stock-low' : 'stock-ok');
         const stockText = product.available_qty <= 0 ? 'Out of stock' : (product.low_stock ? 'Low stock: ' : 'Available: ') + product.available_qty;
-
         el.productPreview.innerHTML = `<div class="product-preview-img">${productInitial(product)}</div>
             <div class="product-preview-info">
                 <h3 class="product-name">${escapeHtml(product.article_name || product.article_no)}</h3>
@@ -2318,12 +2211,10 @@ if ($businessId <= 0) {
                 ${stockEntryDateChip(product, 'in-preview')}
                 <span class="stock-badge ${stockClass}">${stockText}</span>
             </div>`;
-
         el.mrpInput.value = toNumber(product.mrp_rate).toFixed(2);
         el.sellingInput.value = toNumber(product.selling_rate).toFixed(2);
         el.discountType.value = product.product_discount_type || 'none';
         el.discountValue.value = toNumber(product.product_discount_value || 0).toFixed(2);
-
         renderProductOptions();
     }
 
@@ -2334,7 +2225,6 @@ if ($businessId <= 0) {
             el.colorGrid.innerHTML = '<span class="color-chip">Default</span>';
             return;
         }
-
         const selectedColor = selected.color || 'Default';
         const colorMap = {};
         state.productOptions.forEach(function (item) {
@@ -2345,13 +2235,11 @@ if ($businessId <= 0) {
             colorMap[color].totalQty += toNumber(item.available_qty);
             colorMap[color].count += 1;
         });
-
         const colorRows = Object.keys(colorMap).sort(function (a, b) {
             if (a === selectedColor) return -1;
             if (b === selectedColor) return 1;
             return a.localeCompare(b);
         }).map(function (color) { return colorMap[color]; });
-
         el.colorGrid.innerHTML = colorRows.map(function (row) {
             const active = selectedColor === row.color ? 'active' : '';
             return `<button type="button" class="color-chip ${active}" data-color="${escapeHtml(row.color)}" title="${escapeHtml(row.color)} stock: ${toNumber(row.totalQty)}">
@@ -2360,15 +2248,12 @@ if ($businessId <= 0) {
                 <small>${toNumber(row.totalQty)}</small>
             </button>`;
         }).join('');
-
         let visibleSizes = state.productOptions.filter(function (item) {
             return (item.color || 'Default') === selectedColor;
         });
-
         if (!visibleSizes.length) {
             visibleSizes = state.productOptions.slice();
         }
-
         visibleSizes.sort(function (a, b) {
             const av = String(a.size || '').trim();
             const bv = String(b.size || '').trim();
@@ -2377,7 +2262,6 @@ if ($businessId <= 0) {
             if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
             return av.localeCompare(bv);
         });
-
         el.sizeGrid.innerHTML = visibleSizes.map(function (item, index) {
             const active = Number(selected.stock_item_id) === Number(item.stock_item_id) ? 'active' : '';
             const disabled = toNumber(item.available_qty) <= 0 ? 'disabled' : '';
@@ -2398,10 +2282,8 @@ if ($businessId <= 0) {
             persistCurrentBill();
             return;
         }
-
         el.emptyBill.classList.add('d-none');
         el.billItemsTable.classList.remove('d-none');
-
         el.billItemsBody.innerHTML = state.items.map(function (item, index) {
             const itemDiscount = Math.max(0, toNumber(item.mrp_rate) - toNumber(item.selling_rate));
             const amount = toNumber(item.qty) * toNumber(item.selling_rate);
@@ -2420,7 +2302,6 @@ if ($businessId <= 0) {
                 <td><button type="button" class="row-action remove js-remove-line" data-index="${index}"><i data-lucide="trash-2"></i></button></td>
             </tr>`;
         }).join('');
-
         refreshIcons();
         renderSummary();
         persistCurrentBill();
@@ -2430,19 +2311,16 @@ if ($businessId <= 0) {
         if (!state.paymentMethods.length) {
             state.paymentMethods = [{ payment_method_id: 0, payment_method_name: 'Cash', method_type: 'cash' }];
         }
-
         if (!state.selectedPaymentMethodId && state.paymentMethods.length) {
             state.selectedPaymentMethodId = state.paymentMethods[0].payment_method_id;
             state.paymentMode = state.paymentMethods[0].method_type;
         }
-
         el.paymentMethods.innerHTML = state.paymentMethods.map(function (method) {
             const active = String(method.payment_method_id) === String(state.selectedPaymentMethodId) || (state.paymentMode === 'split' && method.method_type === 'split');
             return `<button type="button" class="pay-chip ${active ? 'active' : ''}" data-method-id="${method.payment_method_id}" data-method-type="${method.method_type}">
                 ${escapeHtml(method.payment_method_name)}
             </button>`;
         }).join('');
-
         renderSplitRows();
         refreshIcons();
     }
@@ -2475,11 +2353,8 @@ if ($businessId <= 0) {
         if (el.sumGst) el.sumGst.textContent = money.format(s.gstAmount || 0);
         el.sumRoundOff.textContent = money.format(s.roundOff);
         el.sumGrand.textContent = shortMoney.format(s.grand);
-
-        // Keep paid amount zero. Pending amount equals grand total until collected in Pending Bills.
         el.singlePaidAmount.value = '0.00';
         el.singlePaymentRef.value = '';
-
         const s2 = currentSummary();
         el.paidAmountView.value = money.format(s2.paid);
         el.balanceAmountView.value = money.format(s2.balance);
@@ -2494,19 +2369,15 @@ if ($businessId <= 0) {
         const total = toNumber(row.total_amount || row.net_amount || row.grand_total || 0);
         const paid = toNumber(row.paid_amount || row.collected_amount || 0);
         const balance = toNumber(row.balance_amount || row.pending_amount || row.due_amount || 0);
-
         if (billStatus === 'hold' || billStatus === 'draft') {
             return { key: 'hold', label: 'Hold' };
         }
-
         if (source === 'workflow' && !['converted', 'completed', 'cancelled', 'returned'].includes(billStatus)) {
             return { key: 'hold', label: 'Hold' };
         }
-
         if (paymentStatus === 'paid' || (total > 0 && balance <= 0.009 && paid >= (total - 0.009))) {
             return { key: 'paid', label: 'Paid' };
         }
-
         return { key: 'unpaid', label: 'Unpaid' };
     }
 
@@ -2523,6 +2394,9 @@ if ($businessId <= 0) {
         });
     }
 
+    // ============================================
+    // RENDER BILL HISTORY - REMOVED RETURN BUTTON
+    // ============================================
     function renderBillHistory(records) {
         records = records || state.billHistory || [];
         const holdDraftCount = records.filter(function (r) { return resolveHistoryStatus(r).key === 'hold'; }).length;
@@ -2541,8 +2415,9 @@ if ($businessId <= 0) {
             const source = String(row.source_type || (row.workflow_id ? 'workflow' : 'bill'));
             const canEdit = source === 'workflow' && ['hold', 'draft'].includes(rawStatus);
             const canCancel = rawStatus !== 'cancelled' && rawStatus !== 'returned';
-            const canReturn = source === 'bill' && rawStatus === 'completed' && singleStatus.key === 'paid';
             const canPrint = source === 'bill' && parseInt(row.bill_id || 0, 10) > 0;
+            // REMOVED: canReturn variable - no longer needed
+            
             return `<div class="history-card">
                 <div class="avatar-circle"><i data-lucide="receipt"></i></div>
                 <div class="flex-grow-1 min-w-0">
@@ -2552,8 +2427,7 @@ if ($businessId <= 0) {
                 </div>
                 <div class="d-flex flex-wrap gap-1 justify-content-end">
                     ${canEdit ? `<button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold js-resume-workflow" data-id="${id}">Edit</button>` : ''}
-                    ${canPrint ? `<button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-bold js-reprint-bill" data-id="${row.bill_id}">Reprint</button>` : ''}
-                    ${canReturn ? `<button type="button" class="btn btn-sm btn-outline-warning rounded-pill fw-bold js-return-bill" data-id="${row.bill_id}">Return</button>` : ''}
+                    ${canPrint ? `<button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-bold js-reprint-bill-direct" data-id="${row.bill_id}">Reprint</button>` : ''}
                     ${canCancel ? `<button type="button" class="btn btn-sm btn-outline-danger rounded-pill fw-bold js-cancel-history" data-id="${id}" data-source="${escapeHtml(source)}">Cancel</button>` : ''}
                     ${canPrint ? `<button type="button" class="btn btn-sm btn-dark rounded-pill fw-bold js-open-bill" data-id="${row.bill_id}">Open</button>` : ''}
                 </div>
@@ -2561,6 +2435,58 @@ if ($businessId <= 0) {
         }).join('');
 
         refreshIcons();
+    }
+
+    // ============================================
+    // DIRECT REPRINT FUNCTION - NO REDIRECT
+    // ============================================
+    async function reprintHistoryBillDirect(billId) {
+        billId = parseInt(billId || 0, 10);
+        if (!billId) {
+            showMessage('warning', 'Invalid bill ID for reprint.');
+            return;
+        }
+
+        const btn = document.querySelector('.js-reprint-bill-direct[data-id="' + billId + '"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Printing...';
+        }
+
+        try {
+            const data = await apiGet({ action: 'get_bill_for_print', bill_id: billId });
+            if (!data.success) {
+                showMessage('error', data.message || 'Unable to fetch bill details for reprint.');
+                return;
+            }
+
+            const bill = data.bill || {};
+            const items = data.items || [];
+            const payments = data.payments || [];
+
+            const printData = buildThermalPrintData(bill, items, bill.customer_name, bill.branch_name);
+            printData.PrintType = 'CREATE_BILL';
+            
+            if (payments && payments.length > 0) {
+                printData.PaymentMethod = payments[0].payment_method_name || 'Cash';
+                printData.CollectedBy = payments[0].cashier_name || '';
+                printData.Paid = parseFloat(payments[0].paid_amount || bill.paid_amount || 0);
+            }
+
+            const result = await printViaThermalService(printData);
+            
+            if (result) {
+                showMessage('success', 'Bill reprinted successfully on thermal printer.');
+            }
+        } catch (error) {
+            console.error('Reprint error:', error);
+            showMessage('error', 'Unable to reprint bill. Please check printer service is running.');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Reprint';
+            }
+        }
     }
 
     function renderHeldBills() {
@@ -2602,7 +2528,6 @@ if ($businessId <= 0) {
             state.billBarcode = data.next_bill_barcode || '';
             state.paymentMethods = data.payment_methods || [];
             state.heldBills = data.held_bills || [];
-                state.billHistory = data.bill_history || state.billHistory;
             state.billHistory = data.bill_history || [];
             el.billNo.textContent = state.billNo;
             renderBranches();
@@ -2660,10 +2585,8 @@ if ($businessId <= 0) {
             if (!data.success) {
                 return;
             }
-
             const allProducts = data.products || [];
             const products = allProducts.slice(0, 5);
-
             if (!products.length) {
                 el.productSuggestions.products = [];
                 el.productSuggestions.innerHTML = `
@@ -2677,7 +2600,6 @@ if ($businessId <= 0) {
                 el.productSuggestions.style.display = 'block';
                 return;
             }
-
             let html = `<div class="suggestion-header"><span>Matching Products</span><span>Showing ${products.length} of ${allProducts.length}</span></div>`;
             html += products.map(function (p, index) {
                 const sizeTone = sizeToneClass(p.stock_item_id || p.size || index, index);
@@ -2697,7 +2619,6 @@ if ($businessId <= 0) {
                     <div class="suggestion-stock"><strong>${toNumber(p.available_qty || 0)}</strong>in stock<br>${money.format(toNumber(p.selling_rate))}</div>
                 </div>`;
             }).join('');
-
             el.productSuggestions.products = products;
             el.productSuggestions.innerHTML = html;
             el.productSuggestions.style.display = 'block';
@@ -2724,15 +2645,12 @@ if ($businessId <= 0) {
             el.productSearch.focus();
             return;
         }
-
         const qty = Math.max(1, toNumber(autoQty || el.qtyInput.value || 1));
         const existingQty = state.items.filter(i => Number(i.stock_item_id) === Number(p.stock_item_id)).reduce((sum, i) => sum + toNumber(i.qty), 0);
-
         if (existingQty + qty > toNumber(p.available_qty)) {
             showMessage('error', 'Stock not available. Available: ' + p.available_qty + ', already in bill: ' + existingQty);
             return;
         }
-
         const selling = toNumber(el.sellingInput.value || p.selling_rate);
         const mrp = toNumber(p.mrp_rate);
         if (selling < 0 || selling > mrp) {
@@ -2740,7 +2658,6 @@ if ($businessId <= 0) {
             el.sellingInput.focus();
             return;
         }
-
         const item = {
             stock_item_id: p.stock_item_id,
             stock_batch_id: p.stock_batch_id,
@@ -2764,14 +2681,12 @@ if ($businessId <= 0) {
             selling_rate: selling,
             item_remarks: el.itemRemarks.value.trim()
         };
-
         const duplicate = state.items.find(i => Number(i.stock_item_id) === Number(item.stock_item_id) && toNumber(i.selling_rate) === toNumber(item.selling_rate));
         if (duplicate) {
             duplicate.qty = toNumber(duplicate.qty) + qty;
         } else {
             state.items.push(item);
         }
-
         renderBillItems();
         state.selectedProduct = null;
         state.productOptions = [];
@@ -2782,7 +2697,6 @@ if ($businessId <= 0) {
     async function scanCode(code) {
         code = String(code || '').trim();
         if (!code) return;
-
         try {
             const data = await apiGet({ action: 'scan_product', code: code });
             if (!data.success || !data.scan) {
@@ -2812,7 +2726,6 @@ if ($businessId <= 0) {
             const allCustomers = data.success ? (data.customers || []) : [];
             const customers = allCustomers.slice(0, 5);
             let html = `<div class="suggestion-header"><span>${query ? 'Matching Customers' : 'Recent Customers'}</span><span>Showing ${customers.length} of ${allCustomers.length}</span></div>`;
-
             if (!customers.length && !query) {
                 html += `<div class="suggestion-item is-empty">
                     <div class="suggestion-img"><i data-lucide="users" style="width:16px;height:16px;"></i></div>
@@ -2822,7 +2735,6 @@ if ($businessId <= 0) {
                     </div>
                 </div>`;
             }
-
             html += customers.map(function (c) {
                 const initial = escapeHtml((c.customer_name || 'C').substring(0,1).toUpperCase());
                 return `<div class="suggestion-item js-customer-suggestion" data-id="${c.customer_id}" title="Select customer">
@@ -2838,7 +2750,6 @@ if ($businessId <= 0) {
                     </div>
                 </div>`;
             }).join('');
-
             if (query) {
                 html += `<div class="suggestion-item is-create js-create-customer-from-search" title="Create new customer">
                     <div class="suggestion-img">+</div>
@@ -2848,7 +2759,6 @@ if ($businessId <= 0) {
                     </div>
                 </div>`;
             }
-
             el.customerSuggestions.customers = customers;
             el.customerSuggestions.allCustomers = allCustomers;
             el.customerSuggestions.innerHTML = html;
@@ -2909,11 +2819,9 @@ if ($businessId <= 0) {
             const value = el.customerSearch.value.trim();
             customer = makeWalkInCustomer(value || 'Walk-in Customer', normalizeMobile(value));
         }
-
         customer.customer_id = parseInt(customer.customer_id || 0, 10);
         customer.customer_name = String(customer.customer_name || customer.name || 'Walk-in Customer').trim() || 'Walk-in Customer';
         customer.mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
-
         if (customer.customer_id > 0) {
             customer.is_walkin_customer = 0;
             customer.customer_source = 'master';
@@ -2925,7 +2833,6 @@ if ($businessId <= 0) {
             customer.save_to_master = 0;
             customer.visible_in_customer_master = 0;
         }
-
         return customer;
     }
 
@@ -2935,7 +2842,6 @@ if ($businessId <= 0) {
         const name = String(customer.customer_name || customer.name || '').trim();
         const query = mobile || name;
         if (!query) { return null; }
-
         try {
             const data = await apiGet({ action: 'search_customers', q: query, limit: 20 });
             const rows = data.success ? (data.customers || []) : [];
@@ -2949,7 +2855,6 @@ if ($businessId <= 0) {
                 if (byName) { return byName; }
             }
         } catch (error) {}
-
         return null;
     }
 
@@ -2957,13 +2862,11 @@ if ($businessId <= 0) {
         if (state.selectedCustomer && parseInt(state.selectedCustomer.customer_id || 0, 10) > 0) {
             return state.selectedCustomer;
         }
-
         const value = el.customerSearch.value.trim();
         if (!value) {
             state.selectedCustomer = null;
             return null;
         }
-
         const candidate = makeWalkInCustomer(value, normalizeMobile(value));
         const existing = await findExactCustomer(candidate);
         if (existing) {
@@ -2974,7 +2877,6 @@ if ($businessId <= 0) {
             persistCurrentBill();
             return existing;
         }
-
         state.selectedCustomer = candidate;
         renderCustomer();
         renderSummary();
@@ -2993,12 +2895,13 @@ if ($businessId <= 0) {
     function buildPayload() {
         const customer = buildCustomerPayload();
         const taxSummary = currentSummary();
-
         return {
             hold_id: state.holdId || 0,
             workflow_id: state.holdId || 0,
             workflow_type: state.workflowType || '',
             branch_id: state.branchId,
+            branch_name: getSelectedBranchName(),
+            sales_user: salesUserName,
             customer: customer,
             customer_is_walkin: customer.is_walkin_customer ? 1 : 0,
             customer_source: customer.customer_source || (customer.customer_id > 0 ? 'master' : 'walk_in'),
@@ -3041,12 +2944,11 @@ if ($businessId <= 0) {
                     available_qty: toNumber(item.available_qty)
                 };
             }),
-            payments: buildPayments()
+            payments: []
         };
     }
 
     function buildPayments() {
-        // No payment is sent during bill creation. Payment is collected only from Pending Bills.
         return [];
     }
 
@@ -3060,32 +2962,85 @@ if ($businessId <= 0) {
         window.open(url, '_blank', 'noopener');
     }
 
+    async function reprintLastSavedBill() {
+        const billId = state.lastSavedBillId || (state.lastSavedBill ? state.lastSavedBill.bill_id : 0);
+        if (!billId) {
+            showMessage('warning', 'Please save the bill before printing.');
+            return;
+        }
+        openBillPrint(billId, false);
+        await reprintBillThermal(state.lastSavedBill, state.lastSavedItems, state.lastSavedCustomerName, state.lastSavedBranchName);
+    }
+
+    function getSelectedBranchName() {
+        const selected = el.branchSelect && el.branchSelect.options
+            ? el.branchSelect.options[el.branchSelect.selectedIndex]
+            : null;
+        return selected ? selected.textContent.trim() : '';
+    }
+
+    function buildLocalPrintInvoice(savedBill, submittedPayload) {
+        savedBill = savedBill || {};
+        submittedPayload = submittedPayload || {};
+        const customer = submittedPayload.customer || {};
+        const items = Array.isArray(submittedPayload.items) ? submittedPayload.items : [];
+        return {
+            shopName: state.business.business_name || state.business.name || 'GK FOOTWEAR',
+            address: state.business.address || 'Gandhi Nagar, Krishnagiri.',
+            invoiceTitle: savedBill.invoice_title || 'BILL OF SUPPLY',
+            billNumber: savedBill.bill_no || state.billNo || '',
+            orderNumber: savedBill.order_no || ('ORD-' + (savedBill.bill_no || state.billNo || '')),
+            billDate: new Date().toISOString(),
+            customerName: savedBill.customer_name || customer.customer_name || 'Walk-in Customer',
+            branchName: savedBill.branch_name || getSelectedBranchName(),
+            salesUserName: salesUserName || 'Sales User',
+            status: String(savedBill.payment_status || 'PENDING').toUpperCase(),
+            barcodeNumber: savedBill.bill_barcode || savedBill.barcode_value || state.billBarcode || savedBill.bill_no || '',
+            paidAmount: Number(savedBill.paid_amount || 0),
+            printerName: localStorage.getItem('gk_thermal_printer') || '',
+            items: items.map(function (item) {
+                return {
+                    name: item.article_name || item.product_name || 'Item',
+                    productCode: item.article_no || '',
+                    brand: item.brand_name || '',
+                    size: item.size || '',
+                    quantity: Number(item.qty || 0),
+                    rate: Number(item.selling_rate || 0)
+                };
+            })
+        };
+    }
+
     async function saveBill(printAfter) {
         if (!state.items.length) {
             showMessage('warning', 'Add at least one item.');
             return;
         }
-
         await prepareCustomerForSubmit();
         const payload = buildPayload();
+        const itemsSnapshot = payload.items.slice();
+        const customerNameSnapshot = payload.customer_display_name || 'Walk-in Customer';
+        const branchNameSnapshot = getSelectedBranchName();
         try {
             const data = await apiPost('save_bill', payload);
             if (!data.success) {
                 showMessage('error', data.message || 'Bill save failed.');
                 return;
             }
-
             showMessage('success', data.message || 'Bill saved.');
             state.lastSavedBill = data.saved.bill || null;
             state.lastSavedBillId = parseInt(data.saved.bill_id || (state.lastSavedBill ? state.lastSavedBill.bill_id : 0) || 0, 10);
+            state.lastSavedItems = itemsSnapshot;
+            state.lastSavedCustomerName = customerNameSnapshot;
+            state.lastSavedBranchName = branchNameSnapshot;
             if (state.lastSavedBill) {
                 state.billBarcode = state.lastSavedBill.bill_barcode || state.lastSavedBill.barcode_value || state.billBarcode || '';
             }
-
             if (printAfter) {
-                openBillPrint(state.lastSavedBillId, true);
+                const printData = buildThermalPrintData(state.lastSavedBill, itemsSnapshot, customerNameSnapshot, branchNameSnapshot);
+                printData.PrintType = 'CREATE_BILL';
+                await printViaThermalService(printData);
             }
-
             resetBill(true);
             await refreshNumbersAndHolds();
             await loadBillHistory();
@@ -3099,7 +3054,6 @@ if ($businessId <= 0) {
             showMessage('warning', 'Add items before saving ' + (type === 'draft' ? 'draft.' : 'hold.'));
             return;
         }
-
         try {
             await prepareCustomerForSubmit();
             state.workflowType = type;
@@ -3108,7 +3062,6 @@ if ($businessId <= 0) {
                 showMessage('error', data.message || 'Unable to save bill workflow.');
                 return;
             }
-
             state.billHistory = data.history || state.billHistory;
             state.heldBills = data.held_bills || state.heldBills;
             renderBillHistory(state.billHistory);
@@ -3170,7 +3123,13 @@ if ($businessId <= 0) {
         state.selectedCustomer = null;
         state.holdId = 0;
         state.workflowType = '';
-        if (!keepLastSaved) { state.lastSavedBill = null; state.lastSavedBillId = 0; }
+        if (!keepLastSaved) {
+            state.lastSavedBill = null;
+            state.lastSavedBillId = 0;
+            state.lastSavedItems = [];
+            state.lastSavedCustomerName = 'Walk-in Customer';
+            state.lastSavedBranchName = '';
+        }
         el.productSearch.value = '';
         el.customerSearch.value = '';
         el.billDiscountType.value = 'none';
@@ -3193,7 +3152,6 @@ if ($businessId <= 0) {
                 showMessage('error', data.message || 'Unable to resume saved bill.');
                 return;
             }
-
             const h = data.hold_data || {};
             state.holdId = parseInt(h.hold_id || holdId, 10);
             state.items = h.items || [];
@@ -3259,6 +3217,7 @@ if ($businessId <= 0) {
 
     function showPreview(savedBill) {
         const bill = savedBill || null;
+        state.previewBill = bill;
         const summary = currentSummary();
         const business = state.business || {};
         const branch = state.branches.find(b => Number(b.branch_id) === Number(state.branchId)) || {};
@@ -3323,7 +3282,6 @@ if ($businessId <= 0) {
             ${state.invoiceSettings.composition_note && parseInt(state.invoiceSettings.show_composition_note || 0, 10) === 1 ? `<div class="center muted mt-2">${escapeHtml(state.invoiceSettings.composition_note)}</div>` : ''}
             ${state.invoiceSettings.footer_text ? `<div class="center muted mt-2">${escapeHtml(state.invoiceSettings.footer_text)}</div>` : '<div class="center muted mt-2">Thank you. Visit again.</div>'}
         `;
-
         modal('previewModal').show();
     }
 
@@ -3497,15 +3455,21 @@ if ($businessId <= 0) {
             else { cancelWorkflow(parseInt(cancelHoldNode.dataset.id, 10)); }
         }
 
-        const reprintNode = event.target.closest('.js-reprint-bill, .js-open-bill');
-        if (reprintNode) {
-            openBillPrint(parseInt(reprintNode.dataset.id, 10), reprintNode.classList.contains('js-reprint-bill'));
+        // ============================================
+        // DIRECT REPRINT EVENT HANDLER
+        // ============================================
+        const reprintDirectNode = event.target.closest('.js-reprint-bill-direct');
+        if (reprintDirectNode) {
+            event.preventDefault();
+            reprintHistoryBillDirect(parseInt(reprintDirectNode.dataset.id, 10));
         }
 
-        const returnNode = event.target.closest('.js-return-bill');
-        if (returnNode) {
-            returnSavedBill(parseInt(returnNode.dataset.id, 10));
+        const openBillNode = event.target.closest('.js-open-bill');
+        if (openBillNode) {
+            openBillPrint(parseInt(openBillNode.dataset.id, 10), false);
         }
+
+        // REMOVED: Return button handler - no longer needed
     });
 
     document.addEventListener('input', function (event) {
@@ -3576,16 +3540,30 @@ if ($businessId <= 0) {
     document.getElementById('billHistoryBtn').addEventListener('click', function () { loadBillHistory(); modal('billHistoryModal').show(); });
     document.getElementById('holdBillBtn').addEventListener('click', holdBill);
     document.getElementById('saveBillBtn').addEventListener('click', function () { saveBill(false); });
-    document.getElementById('savePrintBtn').addEventListener('click', function () { saveBill(true); });
-    document.getElementById('previewBtn').addEventListener('click', function () { showPreview(null); });
-    document.getElementById('printBtn').addEventListener('click', function () { openBillPrint(state.lastSavedBillId || (state.lastSavedBill ? state.lastSavedBill.bill_id : 0), true); });
-    document.getElementById('draftBtn').addEventListener('click', draftBill);
+    document.getElementById('savePrintBtn').addEventListener('click', async function () {
+        const button = this;
+        if (button.disabled) return;
+        button.disabled = true;
+        const originalHtml = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving & Printing...';
+        try {
+            await saveBill(true);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalHtml;
+            if (window.lucide) window.lucide.createIcons();
+        }
+    });
+    document.getElementById('printBtn').addEventListener('click', function () { reprintLastSavedBill(); });
     document.getElementById('cancelBillBtn').addEventListener('click', cancelCurrentBill);
-    document.getElementById('returnBillBtn').addEventListener('click', returnCurrentBill);
     document.getElementById('newBillBtn').addEventListener('click', function () { if (!state.items.length || confirm('Start new bill?')) resetBill(false); });
-    document.getElementById('modalPrintBtn').addEventListener('click', function () {
+    document.getElementById('modalPrintBtn').addEventListener('click', async function () {
+        if (state.previewBill) {
+            await reprintBillThermal(state.previewBill, state.previewBill.items || [], state.previewBill.customer_name, state.previewBill.branch_name);
+            return;
+        }
         const billId = state.lastSavedBillId || (state.lastSavedBill ? state.lastSavedBill.bill_id : 0);
-        if (billId) { openBillPrint(billId, true); return; }
+        if (billId) { openBillPrint(billId, false); return; }
         window.print();
     });
     document.getElementById('darkModeBtn').addEventListener('click', function () { el.posPage.classList.toggle('dark-pos'); });
@@ -3628,7 +3606,6 @@ if ($businessId <= 0) {
             showMessage('warning', 'Enter customer name or mobile.');
             return;
         }
-
         try {
             const existing = await findExactCustomer(payload);
             if (existing) {
@@ -3642,9 +3619,6 @@ if ($businessId <= 0) {
                 showMessage('success', 'Existing customer selected. Duplicate customer not created.');
                 return;
             }
-
-            // Create Bill must not create Customer Master records.
-            // Any new/non-existing customer entered here is saved only in the bill as a Walk-in customer.
             state.selectedCustomer = makeBillOnlyWalkInFromPayload(payload);
             el.customerSearch.value = selectedCustomerLabel(state.selectedCustomer);
             renderCustomer();
@@ -3661,17 +3635,14 @@ if ($businessId <= 0) {
     async function startScanner() {
         modal('scannerModal').show();
         el.manualScanInput.focus();
-
         if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             return;
         }
-
         try {
             state.scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             el.scannerVideo.srcObject = state.scannerStream;
             await el.scannerVideo.play();
             const detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'ean_8'] });
-
             state.scannerTimer = setInterval(async function () {
                 try {
                     const barcodes = await detector.detect(el.scannerVideo);

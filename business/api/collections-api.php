@@ -181,6 +181,7 @@ function cc_payment_methods(mysqli $conn, $businessId) {
     ", 'i', array($businessId));
 }
 
+// FIXED: Simplified pending filters - shows ALL pending/partial bills correctly
 function cc_pending_filters(mysqli $conn, $businessId, $allowedIds, &$sql, &$types, array &$params) {
     $q = trim((string)($_GET['q'] ?? $_GET['search'] ?? ''));
     $branchId = (int)($_GET['branch_id'] ?? 0);
@@ -188,11 +189,10 @@ function cc_pending_filters(mysqli $conn, $businessId, $allowedIds, &$sql, &$typ
     $dateFrom = trim((string)($_GET['date_from'] ?? ''));
     $dateTo = trim((string)($_GET['date_to'] ?? ''));
 
+    // FIX: Simplified WHERE clause - show all pending/partial bills regardless of balance
     $sql .= " WHERE b.business_id = ?
                 AND b.bill_status = 'active'
-                AND b.payment_status IN ('pending','partial')
-                AND b.balance_amount > 0.0001
-                AND b.paid_amount < b.net_amount";
+                AND b.payment_status IN ('pending', 'partial')";
     $types .= 'i';
     $params[] = $businessId;
 
@@ -210,7 +210,8 @@ function cc_pending_filters(mysqli $conn, $businessId, $allowedIds, &$sql, &$typ
         }
     }
 
-    if (in_array($paymentStatus, array('pending','partial'), true)) {
+    // FIX: Additional filter for pending/partial
+    if (in_array($paymentStatus, array('pending', 'partial'), true)) {
         $sql .= " AND b.payment_status = ?";
         $types .= 's';
         $params[] = $paymentStatus;
@@ -261,7 +262,7 @@ function cc_pending_rows(mysqli $conn, $businessId, $allowedIds) {
 
     $base = "
         FROM bills b
-        LEFT JOIN bill_barcodes bb ON bb.bill_id = b.bill_id AND bb.business_id = b.business_id
+        LEFT JOIN bill_barcodes bb ON bb.bill_id = b.bill_id AND bb.business_id = b.business_id AND bb.barcode_status = 'active'
         LEFT JOIN branches br ON br.branch_id = b.branch_id AND br.business_id = b.business_id
         LEFT JOIN users u ON u.user_id = b.created_by AND u.business_id = b.business_id
     ";
@@ -274,6 +275,7 @@ function cc_pending_rows(mysqli $conn, $businessId, $allowedIds) {
     $total = (int)($countRow['total'] ?? 0);
     $totalPages = max(1, (int)ceil($total / $perPage));
 
+    // FIX: Added ORDER BY to show newest bills first
     $sql = "
         SELECT
             b.bill_id, b.branch_id, b.bill_no, b.order_no, b.bill_date, b.bill_time,
@@ -287,7 +289,7 @@ function cc_pending_rows(mysqli $conn, $businessId, $allowedIds) {
             (SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.bill_id AND bi.business_id = b.business_id) AS item_count,
             (SELECT COALESCE(SUM(bi.qty),0) FROM bill_items bi WHERE bi.bill_id = b.bill_id AND bi.business_id = b.business_id) AS total_qty
         " . $whereSql . "
-        ORDER BY b.bill_date ASC, b.bill_time ASC, b.bill_id ASC
+        ORDER BY b.bill_date DESC, b.bill_time DESC, b.bill_id DESC
         LIMIT ? OFFSET ?
     ";
     $types = $whereTypes . 'ii';
@@ -612,9 +614,7 @@ function cc_get_pending_bill(mysqli $conn, $businessId, $allowedIds) {
         WHERE b.business_id = ?
           AND b.bill_id = ?
           AND b.bill_status = 'active'
-          AND b.payment_status IN ('pending','partial')
-          AND b.balance_amount > 0.0001
-          AND b.paid_amount < b.net_amount
+          AND b.payment_status IN ('pending', 'partial')
     ";
     $types = 'ii';
     $params = array($businessId, $billId);
@@ -730,9 +730,7 @@ function cc_collect_payment(mysqli $conn, $businessId, $allowedIds) {
             WHERE business_id = ?
               AND bill_id = ?
               AND bill_status = 'active'
-              AND payment_status IN ('pending','partial')
-              AND balance_amount > 0.0001
-              AND paid_amount < net_amount
+              AND payment_status IN ('pending', 'partial')
         ";
         $types = 'ii';
         $params = array($businessId, $billId);
@@ -789,7 +787,7 @@ function cc_collect_payment(mysqli $conn, $businessId, $allowedIds) {
             throw new Exception('Payment amount could not be applied.');
         }
 
-        $newPaid = min((float)$bill['net_amount'], $oldPaid + $totalApplied);
+        $newPaid = $oldPaid + $totalApplied;
         $newBalance = max(0, (float)$bill['net_amount'] - $newPaid);
         $newStatus = $newBalance <= 0.0001 ? 'paid' : 'partial';
 

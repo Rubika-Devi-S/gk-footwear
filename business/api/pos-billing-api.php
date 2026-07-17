@@ -2,11 +2,8 @@
 /**
  * GK Footwear POS Billing API
  * Place this file at: api/pos-billing-api.php
- *
- * Fix included:
- * - search_products returns stock_entry_date / entry_date / inward_date
- * - get_product_options returns stock_entry_date / entry_date / inward_date
- * - joins stock_inward_batches so newly added stock shows exact inward/entry date
+ * 
+ * Supports: Create Bill Printing & Collection Payment Printing
  */
 
 require_once __DIR__ . '/../includes/db.php';
@@ -14,12 +11,21 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/permissions.php';
 require_once __DIR__ . '/../includes/csrf.php';
-require_once __DIR__ . '/../controllers/PosBillingController.php';
 
-/*
- * POS billing must save date/time in India time.
- * date_default_timezone_set fixes PHP date()/time(); SET time_zone fixes MySQL NOW()/CURTIME() for this connection.
- */
+// Check if controller exists before requiring
+$controllerPath = __DIR__ . '/../controllers/PosBillingController.php';
+if (!file_exists($controllerPath)) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false, 
+        'message' => 'PosBillingController.php not found at: ' . $controllerPath
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+require_once $controllerPath;
+
 if (!defined('POS_BILLING_TIMEZONE')) { define('POS_BILLING_TIMEZONE', 'Asia/Kolkata'); }
 date_default_timezone_set(POS_BILLING_TIMEZONE);
 if (isset($conn) && $conn instanceof mysqli) {
@@ -51,16 +57,13 @@ function pos_api_branch_id(array $params = array())
     if (isset($params['branch_id']) && (int)$params['branch_id'] > 0) {
         return (int)$params['branch_id'];
     }
-
     if (isset($params['firm_id']) && (int)$params['firm_id'] > 0) {
         return (int)$params['firm_id'];
     }
-
     if (function_exists('current_branch_id')) {
         $branchId = (int)current_branch_id();
         if ($branchId > 0) { return $branchId; }
     }
-
     return (int)($_SESSION['branch_id'] ?? $_SESSION['default_branch_id'] ?? 0);
 }
 
@@ -92,7 +95,6 @@ function pos_api_payload()
 
 function pos_api_verify_csrf()
 {
-    // Use the project's CSRF helper when present. Otherwise allow the request because older installs vary in helper names.
     if (function_exists('csrf_verify')) {
         if (!csrf_verify()) { pos_api_json(array('success' => false, 'message' => 'Invalid security token. Refresh and try again.'), 419); }
         return;
@@ -111,10 +113,7 @@ function pos_api_verify_csrf()
 
 function pos_api_bind_params(mysqli_stmt $stmt, $types, array $params)
 {
-    if ($types === '') {
-        return;
-    }
-
+    if ($types === '') { return; }
     $bind = array();
     $bind[] = $types;
     foreach ($params as $key => $value) {
@@ -135,10 +134,6 @@ function pos_api_fetch_all(mysqli_stmt $stmt)
     return $rows;
 }
 
-/**
- * Common product SELECT.
- * IMPORTANT: Entry date fields are returned here for Create Bill page.
- */
 function pos_api_product_select_sql()
 {
     return "
@@ -275,7 +270,6 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
         return array('success' => false, 'message' => 'Invalid product selected.');
     }
 
-    // First get the selected stock row so options can be loaded for the same article/brand/category/branch.
     $baseSql = "
         SELECT stock_item_id, business_id, branch_id, category_id, brand_id, article_no
         FROM stock_inward_items
@@ -349,46 +343,249 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
     );
 }
 
+/**
+ * Get branch name with floor name for display
+ */
+function pos_api_get_branch_display_name(mysqli $conn, $branchId, $businessId)
+{
+    if (empty($branchId) || empty($businessId)) {
+        return '';
+    }
+    
+    $query = "SELECT branch_name, floor_name FROM branches WHERE branch_id = ? AND business_id = ? AND status = 1";
+    $stmt = mysqli_prepare($conn, $query);
+    if (!$stmt) {
+        return '';
+    }
+    
+    mysqli_stmt_bind_param($stmt, 'ii', $branchId, $businessId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+    
+    if ($row) {
+        $branchName = $row['branch_name'] ?? '';
+        $floorName = $row['floor_name'] ?? '';
+        return trim($branchName . ($floorName ? ' ' . $floorName : ''));
+    }
+    
+    return '';
+}
+
+// ============================================
+// MAIN API HANDLER
+// ============================================
 try {
-    if (function_exists('require_business_login')) { require_business_login(); }
-    if (function_exists('require_page_access')) { require_page_access($conn, 'bill-create.php'); }
+    // Check if user is logged in
+    if (function_exists('require_business_login')) { 
+        require_business_login(); 
+    }
+
+    // Check page access
+    if (function_exists('require_page_access')) { 
+        require_page_access($conn, 'bill-create.php'); 
+    }
 
     $businessId = pos_api_business_id();
-    if ($businessId <= 0) { pos_api_json(array('success' => false, 'message' => 'Business session missing. Please login again.'), 401); }
+    if ($businessId <= 0) { 
+        pos_api_json(array('success' => false, 'message' => 'Business session missing. Please login again.'), 401); 
+    }
 
-    $controller = new PosBillingController($conn, $businessId, pos_api_user_id(), pos_api_is_admin($conn));
+    // Check if controller class exists
+    if (!class_exists('PosBillingController')) {
+        pos_api_json(array(
+            'success' => false, 
+            'message' => 'PosBillingController class not found. Please check the controller file at: controllers/PosBillingController.php'
+        ), 500);
+    }
+
+    // Initialize controller
+    try {
+        $controller = new PosBillingController($conn, $businessId, pos_api_user_id(), pos_api_is_admin($conn));
+    } catch (Exception $e) {
+        pos_api_json(array(
+            'success' => false, 
+            'message' => 'Failed to initialize PosBillingController: ' . $e->getMessage()
+        ), 500);
+    }
+
     $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
     $action = $method === 'POST' ? (string)($_POST['action'] ?? '') : (string)($_GET['action'] ?? 'bootstrap');
 
+    // ============================================
+    // POST REQUESTS
+    // ============================================
     if ($method === 'POST') {
         pos_api_verify_csrf();
         $payload = pos_api_payload();
-        if ($action === 'save_bill') { pos_api_json($controller->saveBill($payload)); }
-        if ($action === 'save_hold') { pos_api_json($controller->saveWorkflow($payload, 'hold')); }
-        if ($action === 'save_draft') { pos_api_json($controller->saveWorkflow($payload, 'draft')); }
-        if ($action === 'cancel_current_bill') { pos_api_json($controller->saveWorkflow($payload, 'cancelled')); }
-        if ($action === 'cancel_workflow' || $action === 'cancel_hold') { pos_api_json($controller->cancelWorkflow($payload)); }
-        if ($action === 'cancel_saved_bill') { pos_api_json($controller->cancelSavedBill($payload)); }
-        if ($action === 'return_saved_bill') { pos_api_json($controller->returnSavedBill($payload)); }
-        if ($action === 'save_customer') { pos_api_json($controller->saveCustomer($payload)); }
+        
+        if ($action === 'save_bill') 
+        {
+            // Save bill first
+            $result = $controller->saveBill($payload);
+
+            // If bill saved successfully then print
+            if(isset($result['success']) && $result['success'] === true)
+            {
+                $savedBill = $result['saved']['bill'] ?? array();
+                $savedBillId = $result['saved']['bill_id'] ?? 0;
+                
+                // Get branch name
+                $branchName = '';
+                if (!empty($payload['branch_id'])) {
+                    $branchName = pos_api_get_branch_display_name($conn, $payload['branch_id'], $businessId);
+                }
+                if (empty($branchName) && !empty($savedBill['branch_name'])) {
+                    $branchName = $savedBill['branch_name'];
+                }
+                
+                // Get sales user name
+                $salesUserName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Sales User';
+                if (!empty($payload['sales_user'])) {
+                    $salesUserName = $payload['sales_user'];
+                }
+                
+                // Build complete print data with PrintType
+                $printData = array(
+                    "PrintType" => "CREATE_BILL",
+                    "ShopName" => $result['saved']['business_name'] ?? 'GK FOOTWEAR',
+                    "Address" => $result['saved']['business_address'] ?? 'Gandhi Nagar, Krishnagiri.',
+                    "InvoiceTitle" => $savedBill['invoice_title'] ?? 'Bill of Supply',
+                    "BillNo" => $savedBill['bill_no'] ?? '',
+                    "OrderNo" => $savedBill['order_no'] ?? 'ORD-' . ($savedBill['bill_no'] ?? ''),
+                    "Date" => date('d-m-Y'),
+                    "Time" => date('h.i.s A'),
+                    "Customer" => $savedBill['customer_name'] ?? ($payload['customer_name'] ?? 'Walk-in Customer'),
+                    "Branch" => $branchName ?: 'N/A',
+                    "Salesman" => $salesUserName,
+                    "CollectedBy" => '',
+                    "PaymentStatus" => strtoupper($savedBill['payment_status'] ?? 'PENDING'),
+                    "PaymentMethod" => '',
+                    "GrandTotal" => (float)($savedBill['net_amount'] ?? 0),
+                    "Paid" => (float)($savedBill['paid_amount'] ?? 0),
+                    "Balance" => (float)($savedBill['balance_amount'] ?? 0),
+                    "Barcode" => $savedBill['bill_barcode'] ?? $savedBill['barcode_value'] ?? '',
+                    "Items" => array()
+                );
+
+                // Prepare items for thermal printer
+                if(isset($payload['items']) && is_array($payload['items']))
+                {
+                    foreach($payload['items'] as $item)
+                    {
+                        $description = '';
+                        if (!empty($item['article_no'])) {
+                            $description .= $item['article_no'];
+                        }
+                        if (!empty($item['brand_name'])) {
+                            $description .= ($description ? ' / ' : '') . $item['brand_name'];
+                        }
+                        if (!empty($item['size'])) {
+                            $description .= ($description ? ' / ' : '') . 'Size ' . $item['size'];
+                        }
+
+                        $printData['Items'][] = array(
+                            "Name" => $item['article_name'] ?? $item['name'] ?? 'Item',
+                            "Description" => $description,
+                            "Qty" => (float)($item['qty'] ?? 1),
+                            "Rate" => (float)($item['selling_rate'] ?? $item['rate'] ?? 0)
+                        );
+                    }
+                }
+
+                // Send data to local .NET Thermal Print Service
+                try {
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, "http://127.0.0.1:17900/");
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($printData));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: application/json"));
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+                    $printResponse = curl_exec($ch);
+
+                    if(curl_errno($ch))
+                    {
+                        $result['thermal_print'] = "Printer Error : ".curl_error($ch);
+                    }
+                    else
+                    {
+                        $result['thermal_print'] = $printResponse;
+                    }
+
+                    curl_close($ch);
+                } catch (Exception $e) {
+                    $result['thermal_print'] = "Print Service Error: " . $e->getMessage();
+                }
+            }
+
+            // Return final response
+            pos_api_json($result);
+        }
+        elseif ($action === 'save_hold') { pos_api_json($controller->saveWorkflow($payload, 'hold')); }
+        elseif ($action === 'save_draft') { pos_api_json($controller->saveWorkflow($payload, 'draft')); }
+        elseif ($action === 'cancel_current_bill') { pos_api_json($controller->saveWorkflow($payload, 'cancelled')); }
+        elseif ($action === 'cancel_workflow' || $action === 'cancel_hold') { pos_api_json($controller->cancelWorkflow($payload)); }
+        elseif ($action === 'cancel_saved_bill') { pos_api_json($controller->cancelSavedBill($payload)); }
+        elseif ($action === 'return_saved_bill') { pos_api_json($controller->returnSavedBill($payload)); }
+        elseif ($action === 'save_customer') { pos_api_json($controller->saveCustomer($payload)); }
+        else {
+            pos_api_json(array('success' => false, 'message' => 'Invalid POST action: ' . $action), 400);
+        }
     }
 
+    // ============================================
+    // GET REQUESTS
+    // ============================================
     if ($method === 'GET') {
-        if ($action === 'bootstrap') { pos_api_json($controller->bootstrap($_GET)); }
-
-        // Entry date fix: handled directly here so the JSON always contains
-        // stock_entry_date / entry_date / inward_date for Create Bill UI.
-        if ($action === 'search_products') { pos_api_json(pos_api_search_products($conn, $businessId, $_GET)); }
-        if ($action === 'get_product_options') { pos_api_json(pos_api_product_options($conn, $businessId, $_GET)); }
-
-        if ($action === 'scan_product') { pos_api_json($controller->scan($_GET)); }
-        if ($action === 'search_customers') { pos_api_json($controller->searchCustomers($_GET)); }
-        if ($action === 'resume_workflow' || $action === 'resume_hold') { pos_api_json($controller->resumeWorkflow($_GET)); }
-        if ($action === 'bill_history') { pos_api_json($controller->history($_GET)); }
-        if ($action === 'validate_offer') { pos_api_json($controller->validateOffer($_GET)); }
+        if ($action === 'bootstrap') { 
+            pos_api_json($controller->bootstrap($_GET)); 
+        }
+        elseif ($action === 'search_products') { 
+            pos_api_json(pos_api_search_products($conn, $businessId, $_GET)); 
+        }
+        elseif ($action === 'get_product_options') { 
+            pos_api_json(pos_api_product_options($conn, $businessId, $_GET)); 
+        }
+        elseif ($action === 'scan_product') { 
+            pos_api_json($controller->scan($_GET)); 
+        }
+        elseif ($action === 'search_customers') { 
+            pos_api_json($controller->searchCustomers($_GET)); 
+        }
+        elseif ($action === 'resume_workflow' || $action === 'resume_hold') { 
+            pos_api_json($controller->resumeWorkflow($_GET)); 
+        }
+        elseif ($action === 'bill_history') { 
+            pos_api_json($controller->history($_GET)); 
+        }
+        elseif ($action === 'validate_offer') { 
+            pos_api_json($controller->validateOffer($_GET)); 
+        }
+        // ============================================
+        // NEW: GET BILL FOR PRINT - Added for direct reprint
+        // ============================================
+        elseif ($action === 'get_bill_for_print') { 
+            pos_api_json($controller->getBillForPrint($_GET)); 
+        }
+        else {
+            pos_api_json(array('success' => false, 'message' => 'Invalid GET action: ' . $action), 400);
+        }
     }
 
     pos_api_json(array('success' => false, 'message' => 'Invalid POS billing API action.'), 400);
+
 } catch (Throwable $e) {
-    pos_api_json(array('success' => false, 'message' => 'POS Billing API error: ' . $e->getMessage()), 500);
+    // Log the error for debugging
+    error_log("POS Billing API Error: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    pos_api_json(array(
+        'success' => false, 
+        'message' => 'POS Billing API error: ' . $e->getMessage(),
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ), 500);
 }

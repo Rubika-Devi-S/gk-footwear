@@ -293,6 +293,16 @@ if ($businessId <= 0) {
         background: #dc2626;
         border-color: #dc2626;
     }
+
+    /* NEW: Print button with spinner */
+    .bill-action-print-active {
+        color: #ffffff;
+        background: #059669;
+        border-color: #059669;
+        cursor: wait;
+        opacity: 0.8;
+    }
+
     .mp-mobile-card {
         background: var(--card-bg);
         border: 1px solid var(--border-soft);
@@ -317,6 +327,63 @@ if ($businessId <= 0) {
     }
     .amount-positive { color:#15803d; font-weight:800; }
     .amount-due { color:#b91c1c; font-weight:800; }
+
+    /* Print toast notification */
+    .print-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        min-width: 280px;
+        max-width: 400px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #dbe4f0;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, .15);
+        z-index: 9999;
+        display: none;
+        animation: slideUp 0.3s ease;
+    }
+
+    .print-toast.show {
+        display: block;
+    }
+
+    .print-toast.success {
+        border-left: 4px solid #16a34a;
+    }
+
+    .print-toast.error {
+        border-left: 4px solid #dc2626;
+    }
+
+    .print-toast .toast-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: #0f172a;
+    }
+
+    .print-toast .toast-message {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 3px;
+    }
+
+    .print-toast .toast-close {
+        float: right;
+        background: none;
+        border: none;
+        font-size: 16px;
+        cursor: pointer;
+        color: #94a3b8;
+        padding: 0 4px;
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
     @media (max-width: 991px) {
         .bill-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -327,6 +394,7 @@ if ($businessId <= 0) {
         .mp-stat-icon { width: 34px; height: 34px; border-radius: 11px; }
         .mp-stat-value { font-size: 16px; }
         .bill-detail-grid { grid-template-columns: 1fr; }
+        .print-toast { left: 20px; right: 20px; min-width: auto; }
     }
     </style>
 </head>
@@ -335,6 +403,13 @@ if ($businessId <= 0) {
 <?php include __DIR__ . '/includes/page-message.php'; ?>
 <?php if (file_exists(__DIR__ . '/includes/common-toast.php')) { include __DIR__ . '/includes/common-toast.php'; } ?>
 <form id="billListSecurityForm" class="d-none"><?= bill_list_csrf_field() ?></form>
+
+<!-- Print Toast Notification -->
+<div id="printToast" class="print-toast">
+    <button class="toast-close" onclick="closePrintToast()">×</button>
+    <div class="toast-title" id="printToastTitle">Printing...</div>
+    <div class="toast-message" id="printToastMessage">Sending to printer service.</div>
+</div>
 
 <div class="min-vh-100 d-flex">
     <?php include __DIR__ . '/includes/sidebar.php'; ?>
@@ -510,9 +585,9 @@ if ($businessId <= 0) {
                 <div class="text-center text-muted py-4">Loading bill details...</div>
             </div>
             <div class="modal-footer">
-                <a href="#" class="bill-action-icon bill-action-print" id="detailPrintBtn" target="_blank" rel="noopener">
+                <button type="button" class="btn btn-success bill-action-icon bill-action-print" id="detailPrintBtn">
                     <i data-lucide="printer-check"></i><span>Print</span>
-                </a>
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -526,11 +601,13 @@ if ($businessId <= 0) {
     'use strict';
 
     const apiUrl = 'api/bill-list-api.php';
+    const printerUrl = 'http://127.0.0.1:17900/';
     const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
     let currentPage = 1;
     let totalPages = 1;
     let searchTimer = null;
     let detailModal = null;
+    let printingBillId = null;
 
     const tableBody = document.getElementById('billTableBody');
     const mobileCards = document.getElementById('billMobileCards');
@@ -539,6 +616,7 @@ if ($businessId <= 0) {
     const detailBody = document.getElementById('billDetailBody');
     const detailBillSub = document.getElementById('detailBillSub');
     const detailPrintBtn = document.getElementById('detailPrintBtn');
+    const printToast = document.getElementById('printToast');
 
     function csrfToken() {
         const input = document.querySelector('#billListSecurityForm input[name="csrf_token"], #billListSecurityForm input[name="_token"], #billListSecurityForm input[type="hidden"]');
@@ -568,6 +646,193 @@ if ($businessId <= 0) {
         alert(message);
     }
 
+    // ============================================
+    // PRINT TOAST NOTIFICATIONS
+    // ============================================
+    function showPrintToast(title, message, type) {
+        const toast = printToast;
+        if (!toast) return;
+        document.getElementById('printToastTitle').textContent = title;
+        document.getElementById('printToastMessage').textContent = message;
+        toast.className = 'print-toast show ' + (type || 'success');
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(function() {
+            toast.classList.remove('show');
+        }, 5000);
+    }
+
+    function closePrintToast() {
+        const toast = printToast;
+        if (toast) {
+            toast.classList.remove('show');
+            clearTimeout(toast._hideTimer);
+        }
+    }
+
+    window.closePrintToast = closePrintToast;
+
+    // ============================================
+    // PRINTER SERVICE FUNCTIONS
+    // ============================================
+    async function printBillViaService(billData, printType) {
+        printType = printType || 'CREATE_BILL';
+
+        // Show printing toast
+        showPrintToast('🖨️ Printing...', 'Sending bill ' + billData.BillNo + ' to thermal printer.', 'success');
+
+        try {
+            const response = await fetch(printerUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(billData)
+            });
+
+            const result = await response.text();
+            console.log('Printer response:', result);
+
+            if (result === 'PRINT_SUCCESS') {
+                showPrintToast('✅ Print Successful', 'Bill ' + billData.BillNo + ' sent to printer.', 'success');
+                return true;
+            } else {
+                showPrintToast('❌ Print Failed', result || 'Unknown error from printer service.', 'error');
+                return false;
+            }
+        } catch (error) {
+            console.error('Print error:', error);
+            showPrintToast('❌ Print Error', 'Cannot connect to printer service. Please ensure the service is running.', 'error');
+            return false;
+        }
+    }
+
+    // ============================================
+    // BUILD BILL DATA FOR PRINTER SERVICE
+    // ============================================
+    function buildBillDataForPrinter(bill, items, payments, printType) {
+        printType = printType || 'CREATE_BILL';
+
+        // Calculate totals
+        let mrpTotal = 0;
+        let totalQty = 0;
+        const billItems = (items || []).map(function(item) {
+            const qty = toNumber(item.qty);
+            const rate = toNumber(item.selling_rate || item.mrp_rate || 0);
+            const amount = qty * rate;
+            mrpTotal += amount;
+            totalQty += qty;
+            return {
+                Name: (item.article_no || '') + ' ' + (item.article_name || ''),
+                Description: 'Size: ' + (item.size || '-') + ' | Color: ' + (item.color || '-'),
+                Qty: qty,
+                Rate: rate,
+                Amount: amount
+            };
+        });
+
+        // Get payment summary
+        let paymentMethod = 'Cash';
+        let paidAmount = toNumber(bill.paid_amount);
+        let grandTotal = toNumber(bill.net_amount);
+
+        if (payments && payments.length > 0) {
+            const firstPayment = payments[0];
+            paymentMethod = firstPayment.payment_method_name || 'Cash';
+            paidAmount = toNumber(firstPayment.paid_amount);
+        } else if (paidAmount <= 0 && bill.payment_status === 'paid') {
+            paidAmount = grandTotal;
+        }
+
+        // Determine print type based on return/exchange
+        let finalPrintType = printType;
+        if (bill.return_exchange_id && bill.transaction_type) {
+            finalPrintType = bill.transaction_type.toUpperCase() === 'RETURN' ? 'RETURN' : 'EXCHANGE';
+        }
+
+        // Build the bill data structure expected by C# service
+        return {
+            ShopName: 'GK FOOTWEAR',
+            Address: 'Gandhi Nagar, Krishnagiri.',
+            InvoiceTitle: bill.invoice_title || 'Bill of Supply',
+            Phone: '',
+            GSTIN: bill.gstin || '',
+
+            BillNo: bill.bill_no || 'BILL-' + bill.bill_id,
+            Date: bill.bill_date || new Date().toISOString().slice(0, 10),
+            Time: bill.bill_time || new Date().toTimeString().slice(0, 8),
+
+            Customer: bill.customer_name || 'Walk-in Customer',
+            Branch: bill.branch_name || '',
+            Salesman: bill.created_by_name || '',
+            CollectedBy: payments && payments.length > 0 ? payments[0].cashier_name || '' : '',
+            OrderNo: bill.order_no || '',
+
+            PaymentStatus: bill.payment_status || 'PENDING',
+            PaymentMethod: paymentMethod,
+            TransactionType: finalPrintType === 'RETURN' ? 'Return' : (finalPrintType === 'EXCHANGE' ? 'Exchange' : 'Sale'),
+
+            TotalQty: totalQty,
+            GrandTotal: grandTotal,
+            Paid: paidAmount,
+            Balance: Math.max(0, grandTotal - paidAmount),
+
+            Barcode: bill.barcode_value || 'BILL-' + bill.bill_id,
+
+            PrintType: finalPrintType,
+
+            Items: billItems
+        };
+    }
+
+    // ============================================
+    // FETCH BILL DATA AND PRINT
+    // ============================================
+    async function fetchAndPrintBill(billId, printType) {
+        printType = printType || 'CREATE_BILL';
+
+        // Disable the print button
+        const printBtn = document.querySelector('.js-print[data-id="' + billId + '"]');
+        if (printBtn) {
+            printBtn.classList.add('bill-action-print-active');
+            printBtn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:12px;height:12px;"></span> Printing...';
+        }
+
+        try {
+            const data = await apiGet({ action: 'get', bill_id: billId });
+            if (!data.success) {
+                showPrintToast('❌ Error', data.message || 'Unable to fetch bill data.', 'error');
+                return false;
+            }
+
+            const bill = data.bill || {};
+            const items = data.items || [];
+            const payments = data.payments || [];
+
+            // Build bill data for printer
+            const billData = buildBillDataForPrinter(bill, items, payments, printType);
+
+            // Send to printer service
+            const result = await printBillViaService(billData, printType);
+
+            return result;
+        } catch (error) {
+            console.error('Fetch/Print error:', error);
+            showPrintToast('❌ Error', 'Unable to fetch bill data for printing.', 'error');
+            return false;
+        } finally {
+            // Re-enable the print button
+            if (printBtn) {
+                printBtn.classList.remove('bill-action-print-active');
+                printBtn.innerHTML = '<i data-lucide="printer-check"></i><span>Print</span>';
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+    }
+
+    // ============================================
+    // API FUNCTIONS
+    // ============================================
     function buildQuery(params) {
         const query = new URLSearchParams();
         Object.keys(params || {}).forEach(function (key) {
@@ -601,6 +866,9 @@ if ($businessId <= 0) {
         return await response.json();
     }
 
+    // ============================================
+    // UI RENDER FUNCTIONS
+    // ============================================
     function fillSelect(id, rows, valueKey, labelCallback, placeholder) {
         const select = document.getElementById(id);
         if (!select) return;
@@ -640,19 +908,23 @@ if ($businessId <= 0) {
         return '<span class="mp-badge badge-type" title="' + escapeHtml(summary) + '">' + escapeHtml(summary) + '</span>';
     }
 
+    // ============================================
+    // ACTION BUTTONS WITH PRINT FUNCTION
+    // ============================================
     function actionButtons(bill) {
         const billId = parseInt(bill.bill_id || 0, 10);
-        const printUrl = 'bill-print.php?bill_id=' + billId + '&auto_print=1';
+        const printType = 'CREATE_BILL';
 
         let html = '<div class="bill-action-group">';
-        html += '<button type="button" class="bill-action-icon bill-action-view js-view" data-id="' + billId + '" onclick="window.billListViewBill && window.billListViewBill(' + billId + '); return false;" title="View Bill" aria-label="View Bill">' +
+        html += '<button type="button" class="bill-action-icon bill-action-view js-view" data-id="' + billId + '" title="View Bill">' +
                 '<i data-lucide="scan-eye"></i><span>View</span></button>';
 
-        html += '<a href="' + printUrl + '" target="_blank" rel="noopener" class="bill-action-icon bill-action-print" title="Print Bill" aria-label="Print Bill">' +
-                '<i data-lucide="printer-check"></i><span>Print</span></a>';
+        // NEW: Print button with direct printer service call
+        html += '<button type="button" class="bill-action-icon bill-action-print js-print" data-id="' + billId + '" data-print-type="' + printType + '" title="Print Bill">' +
+                '<i data-lucide="printer-check"></i><span>Print</span></button>';
 
         if (String(bill.bill_status || '').toLowerCase() === 'active') {
-            html += '<button type="button" class="bill-action-icon bill-action-cancel js-cancel" data-id="' + billId + '" title="Cancel Bill" aria-label="Cancel Bill">' +
+            html += '<button type="button" class="bill-action-icon bill-action-cancel js-cancel" data-id="' + billId + '" title="Cancel Bill">' +
                     '<i data-lucide="circle-x"></i><span>Cancel</span></button>';
         }
 
@@ -706,6 +978,9 @@ if ($businessId <= 0) {
         }).join('');
     }
 
+    // ============================================
+    // FILTER AND LOAD FUNCTIONS
+    // ============================================
     function filterParams() {
         return {
             action: 'list',
@@ -770,6 +1045,9 @@ if ($businessId <= 0) {
         }
     }
 
+    // ============================================
+    // MODAL FUNCTIONS
+    // ============================================
     function getDetailModal() {
         if (window.bootstrap && window.bootstrap.Modal) {
             if (!detailModal) detailModal = new window.bootstrap.Modal(detailModalEl);
@@ -780,22 +1058,15 @@ if ($businessId <= 0) {
 
     function openDetailModal() {
         const modal = getDetailModal();
-
         if (modal) {
             modal.show();
             return;
         }
-
-        /*
-         * Fallback for pages where Bootstrap JS is not loaded yet.
-         * This makes the View button still open the bill details modal.
-         */
         detailModalEl.classList.add('show');
         detailModalEl.style.display = 'block';
         detailModalEl.removeAttribute('aria-hidden');
         detailModalEl.setAttribute('aria-modal', 'true');
         document.body.classList.add('modal-open');
-
         if (!document.getElementById('billDetailModalBackdrop')) {
             const backdrop = document.createElement('div');
             backdrop.id = 'billDetailModalBackdrop';
@@ -808,13 +1079,11 @@ if ($businessId <= 0) {
         if (window.bootstrap && window.bootstrap.Modal) {
             return;
         }
-
         detailModalEl.classList.remove('show');
         detailModalEl.style.display = 'none';
         detailModalEl.setAttribute('aria-hidden', 'true');
         detailModalEl.removeAttribute('aria-modal');
         document.body.classList.remove('modal-open');
-
         const backdrop = document.getElementById('billDetailModalBackdrop');
         if (backdrop) backdrop.remove();
     }
@@ -855,27 +1124,41 @@ if ($businessId <= 0) {
                     '<td><strong>' + money.format(toNumber(p.paid_amount)) + '</strong></td>' +
                     '<td>' + escapeHtml(p.reference_no || '-') + '</td>' +
                     '<td>' + statusBadge(p.payment_status || '-', '') + '</td>' +
-                    '<td>' + escapeHtml(p.collected_by_name || '-') + '</td>' +
+                    '<td>' + escapeHtml(p.cashier_name || '-') + '</td>' +
                     '<td>' + escapeHtml(p.collected_at || '-') + '</td>' +
                 '</tr>';
             }).join('') + '</tbody></table></div>';
     }
 
+    // ============================================
+    // VIEW BILL DETAILS
+    // ============================================
     async function viewBill(billId) {
         detailBody.innerHTML = '<div class="text-center text-muted py-4">Loading bill details...</div>';
         detailBillSub.textContent = 'Bill #' + billId;
-        detailPrintBtn.href = 'bill-print.php?bill_id=' + billId + '&auto_print=1';
+
+        // Update print button to use printer service
+        detailPrintBtn.onclick = function() {
+            fetchAndPrintBill(billId, 'CREATE_BILL');
+        };
+
         openDetailModal();
+
         try {
             const data = await apiGet({ action: 'get', bill_id: billId });
             if (!data.success) {
                 detailBody.innerHTML = '<div class="text-danger">' + escapeHtml(data.message || 'Unable to load bill details.') + '</div>';
                 return;
             }
+
             const bill = data.bill || {};
             detailBillSub.textContent = (bill.bill_no || ('Bill #' + billId)) + ' · ' + (bill.bill_date || '-') + (bill.bill_time ? ' · ' + bill.bill_time : '');
-            detailPrintBtn.href = 'bill-print.php?bill_id=' + parseInt(bill.bill_id || billId, 10) + '&auto_print=1';
+
             const branch = (bill.branch_name || '-') + (bill.floor_name ? ' / ' + bill.floor_name : '');
+
+            // Store bill ID for print button
+            detailPrintBtn.dataset.billId = billId;
+
             detailBody.innerHTML =
                 '<div class="bill-detail-grid">' +
                     detailBox('Bill No', escapeHtml(bill.bill_no || '-') + '<div class="mp-sub">' + escapeHtml(bill.order_no || '-') + '</div>') +
@@ -890,6 +1173,7 @@ if ($businessId <= 0) {
                 '<div class="d-flex flex-wrap gap-2 mt-3">' + statusBadge(bill.bill_status, 'Bill') + statusBadge(bill.payment_status, 'Payment') + '<span class="mp-badge badge-code">Prints ' + parseInt(bill.print_count || 0, 10) + '</span></div>' +
                 '<h6 class="fw-bold mt-4 mb-2">Bill Items</h6>' + renderItems(data.items || []) +
                 '<h6 class="fw-bold mt-4 mb-2">Payments</h6>' + renderPayments(data.payments || []);
+
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
             detailBody.innerHTML = '<div class="text-danger">Unable to fetch bill details.</div>';
@@ -898,6 +1182,9 @@ if ($businessId <= 0) {
 
     window.billListViewBill = viewBill;
 
+    // ============================================
+    // CANCEL BILL
+    // ============================================
     async function cancelBill(billId) {
         const reason = window.prompt('Reason for cancelling this bill?', 'Customer cancelled / Wrong bill');
         if (reason === null) return;
@@ -915,6 +1202,9 @@ if ($businessId <= 0) {
         }
     }
 
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
     filterForm.addEventListener('submit', function (event) {
         event.preventDefault();
         currentPage = 1;
@@ -951,13 +1241,18 @@ if ($businessId <= 0) {
     document.getElementById('prevPage').addEventListener('click', function () {
         if (currentPage > 1) { currentPage--; loadBills(); }
     });
+
     document.getElementById('nextPage').addEventListener('click', function () {
         if (currentPage < totalPages) { currentPage++; loadBills(); }
     });
 
+    // ============================================
+    // EVENT DELEGATION FOR DYNAMIC BUTTONS
+    // ============================================
     document.addEventListener('click', function (event) {
         const viewBtn = event.target.closest('.js-view');
         const cancelBtn = event.target.closest('.js-cancel');
+        const printBtn = event.target.closest('.js-print');
 
         if (viewBtn) {
             event.preventDefault();
@@ -968,9 +1263,52 @@ if ($businessId <= 0) {
             event.preventDefault();
             cancelBill(cancelBtn.dataset.id);
         }
+
+        // NEW: Handle print button click
+        if (printBtn) {
+            event.preventDefault();
+            const billId = parseInt(printBtn.dataset.id, 10);
+            const printType = printBtn.dataset.printType || 'CREATE_BILL';
+            if (billId > 0) {
+                fetchAndPrintBill(billId, printType);
+            } else {
+                showPrintToast('❌ Error', 'Invalid bill ID for printing.', 'error');
+            }
+        }
     });
 
+    // ============================================
+    // TOAST AUTO-CLOSE ON CLICK OUTSIDE
+    // ============================================
+    document.addEventListener('click', function(event) {
+        const toast = printToast;
+        if (toast && toast.classList.contains('show')) {
+            if (!toast.contains(event.target)) {
+                // Don't auto-close, user must click close button
+            }
+        }
+    });
+
+    // ============================================
+    // KEYBOARD SHORTCUTS
+    // ============================================
+    document.addEventListener('keydown', function(event) {
+        // Ctrl+F to focus search
+        if (event.ctrlKey && event.key === 'f') {
+            event.preventDefault();
+            document.getElementById('search').focus();
+        }
+        // Escape to close toast
+        if (event.key === 'Escape') {
+            closePrintToast();
+        }
+    });
+
+    // ============================================
+    // INITIALIZE
+    // ============================================
     loadInit();
+
 })();
 </script>
 </body>

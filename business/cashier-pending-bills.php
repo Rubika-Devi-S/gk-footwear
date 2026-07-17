@@ -424,6 +424,9 @@ function autoPrintThermalReceipt(billId,gst,collectionAmount){
     params.set('base_due_amount',num(state.bill&&state.bill.balance_amount).toFixed(2));
     params.set('collection_total_amount',collectionDueTotal(gst).toFixed(2));
     params.set('payment_method_name',selectedMethod().payment_method_name||selectedMethod().method_type||'Payment');
+    // FIX: Add collected_by from PHP
+    const collectedBy = <?= json_encode($cashierName) ?>;
+    params.set('collected_by',collectedBy);
     params.set('gst_enabled',gst.enabled?1:0);
     params.set('gst_mode',gst.mode||'intra');
     params.set('gst_rate',num(gst.rate).toFixed(2));
@@ -477,7 +480,31 @@ async function collectPayment(printAfter){
         btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Collecting & Printing...';
     }
 
-    const payload={action:'collect_payment',bill_id:state.bill.bill_id,payment_method_id:state.selectedMethodId,amount_collected:amount,collection_total_amount:collectTotal,base_due_amount:num(state.bill.balance_amount),reference_no:($('reference_no')||{}).value||'',payment_note:($('payment_note')||{}).value||'',gst_enabled:gst.enabled?1:0,gst_type_key:gst.enabled?'gst_regular':'non_gst',gst_mode:gst.mode,gst_rate:gst.rate,taxable_amount:gst.taxable,cgst_amount:gst.cgst,sgst_amount:gst.sgst,igst_amount:gst.igst,tax_amount:gst.gstAmount};
+    // FIX: Add collected_by from PHP session
+    const collectedBy = <?= json_encode($cashierName) ?>;
+
+    const payload={
+        action:'collect_payment',
+        bill_id:state.bill.bill_id,
+        payment_method_id:state.selectedMethodId,
+        amount_collected:amount,
+        collection_total_amount:collectTotal,
+        base_due_amount:num(state.bill.balance_amount),
+        reference_no:($('reference_no')||{}).value||'',
+        payment_note:($('payment_note')||{}).value||'',
+        // FIX: Add collected_by to payload
+        collected_by:collectedBy,
+        gst_enabled:gst.enabled?1:0,
+        gst_type_key:gst.enabled?'gst_regular':'non_gst',
+        gst_mode:gst.mode,
+        gst_rate:gst.rate,
+        taxable_amount:gst.taxable,
+        cgst_amount:gst.cgst,
+        sgst_amount:gst.sgst,
+        igst_amount:gst.igst,
+        tax_amount:gst.gstAmount
+    };
+
     const mixed=mixedPayload();
     if(mixed){
         if(!mixed.length){

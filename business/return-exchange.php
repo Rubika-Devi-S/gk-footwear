@@ -22,6 +22,7 @@ if (function_exists('require_page_access')) {
 
 $pageTitle = 'Return & Exchange';
 $businessId = function_exists('current_business_id') ? (int) current_business_id() : (int)($_SESSION['business_id'] ?? 0);
+$cashierName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Cashier';
 
 if (!function_exists('e')) {
     function e($value) {
@@ -96,6 +97,13 @@ if ($businessId <= 0) {
     .product-result-main{min-width:0}.product-result-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2}.product-result-meta{font-size:10px;color:#64748b;font-weight:700;margin-top:2px}.product-result-barcode{margin-top:5px}
     .product-result-price{font-size:11px;font-weight:900;color:#0f172a;text-align:right;white-space:nowrap}.product-result-stock{font-size:10px;font-weight:900;color:#15803d}
     .selected-product-box.is-empty{color:#64748b;background:#f8fafc;border-style:dashed}.selected-product-box.is-selected{border-color:#86efac;background:#f0fdf4}
+    .scanner-box{border:1px dashed #93c5fd;background:#eff6ff;border-radius:18px;padding:12px}
+    .scanner-video{width:100%;min-height:280px;max-height:360px;object-fit:cover;background:#020617;border-radius:14px;border:1px solid #cbd5e1}
+    .scanner-status{font-size:11px;font-weight:750;border-radius:14px;padding:9px 10px;background:#f8fafc;border:1px solid #dbe4f0;color:#334155}
+    .scanner-status.success{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
+    .scanner-status.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+    .manual-scan-card{border:1px solid #e2e8f0;background:#f8fafc;border-radius:16px;padding:12px}
+    .scan-result-value{font-size:11px;word-break:break-all;color:#475569}
     @media(max-width:991px){.bill-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:767px){.bill-detail-grid{grid-template-columns:1fr}.search-product-row{grid-template-columns:1fr}.bill-search-wrap{grid-template-columns:1fr}.product-result-item{align-items:flex-start;flex-direction:column}.product-result-price{text-align:left}}
     </style>
@@ -139,8 +147,9 @@ if ($businessId <= 0) {
                                 <input type="text" id="billSearch" class="form-control mp-filter-input" placeholder="Scan / enter Bill Barcode or Bill No" autocomplete="off">
                                 <div id="billScanHint" class="scan-helper d-none">Scanner ready. Scan the bill barcode now, or type and press Enter.</div>
                             </div>
-                            <button type="button" id="scanBillBarcode" class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-3" title="Focus barcode scanner input">
-                                <i data-lucide="scan-barcode" style="width:14px;height:14px;"></i> Scan
+                            
+                            <button type="button" id="scanBillCameraBtn" class="btn btn-outline-success btn-sm rounded-pill fw-bold px-3" title="Open camera scanner">
+                                <i data-lucide="camera" style="width:14px;height:14px;"></i> Camera
                             </button>
                             <button type="submit" class="btn btn-dark btn-sm rounded-pill fw-bold px-3">
                                 <i data-lucide="search" style="width:14px;height:14px;"></i> Search
@@ -290,6 +299,44 @@ if ($businessId <= 0) {
     </main>
 </div>
 
+<!-- ============================================ -->
+<!-- CAMERA SCANNER MODAL -->
+<!-- ============================================ -->
+<div class="modal fade" id="scannerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Scan Bill Barcode</h5>
+                    <div class="mp-sub">Scan a bill barcode to load it for Return/Exchange.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="scanner-box mb-3">
+                    <video id="qrScannerVideo" class="scanner-video" playsinline muted></video>
+                </div>
+                <div class="scanner-status mb-3" id="scannerStatus">Click Scan Bill Barcode to start the camera scanner.</div>
+                <div class="manual-scan-card">
+                    <div class="d-flex flex-column flex-md-row gap-2 align-items-md-end">
+                        <div class="flex-grow-1">
+                            <label class="form-label fw-bold small">Manual Barcode / Bill Number</label>
+                            <input type="text" id="manualScanValue" class="form-control" placeholder="Enter bill barcode number, bill no or order no">
+                        </div>
+                        <button type="button" id="manualScanBtn" class="btn btn-dark rounded-pill fw-bold px-3">Find Bill</button>
+                    </div>
+                    <div class="scan-result-value mt-2" id="lastScannedValue"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="restartScannerBtn" class="btn btn-outline-primary">Restart Scanner</button>
+                <button type="button" id="stopScannerBtn" class="btn btn-outline-secondary">Stop Camera</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php if (file_exists(__DIR__ . '/includes/script.php')) { include __DIR__ . '/includes/script.php'; } ?>
 
 <script>
@@ -308,7 +355,16 @@ if ($businessId <= 0) {
         productSearchTimers: {}
     };
 
+    // ============================================
+    // SCANNER VARIABLES
+    // ============================================
+    let scannerModal = null;
+    let scanStream = null;
+    let scanTimer = null;
+    let scanBusy = false;
+
     const apiUrl = 'api/return-exchange-api.php';
+    const printServiceUrl = 'http://127.0.0.1:17900/';
     const money = new Intl.NumberFormat('en-IN', { style:'currency', currency:'INR' });
 
     function csrfToken() {
@@ -366,6 +422,611 @@ if ($businessId <= 0) {
         return await response.json();
     }
 
+    // ============================================
+    // SCANNER FUNCTIONS
+    // ============================================
+    function getScannerModal() {
+        if (window.bootstrap) {
+            if (!scannerModal) scannerModal = new bootstrap.Modal(document.getElementById('scannerModal'));
+            return scannerModal;
+        }
+        return null;
+    }
+
+    function setScannerStatus(message, type) {
+        const box = document.getElementById('scannerStatus');
+        if (!box) return;
+        box.textContent = message || '';
+        box.classList.remove('success', 'error');
+        if (type) box.classList.add(type);
+    }
+
+    function stopScanner() {
+        clearInterval(scanTimer);
+        scanTimer = null;
+        if (scanStream) {
+            scanStream.getTracks().forEach(track => track.stop());
+            scanStream = null;
+        }
+        const video = document.getElementById('qrScannerVideo');
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+        scanBusy = false;
+    }
+
+    async function startScanner() {
+        const video = document.getElementById('qrScannerVideo');
+        if (!video) { return; }
+        if (scanBusy) { return; }
+        scanBusy = true;
+        setScannerStatus('Opening camera scanner...');
+
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Camera access is not supported in this browser.');
+            }
+            if (!('BarcodeDetector' in window)) {
+                throw new Error('BarcodeDetector is not supported in this browser. Use Chrome/Android or enter the scanned value manually.');
+            }
+
+            scanStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+
+            video.srcObject = scanStream;
+            await video.play();
+
+            let formats = ['code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'upc_e'];
+            if (BarcodeDetector.getSupportedFormats) {
+                const supported = await BarcodeDetector.getSupportedFormats();
+                formats = formats.filter(f => supported.includes(f));
+                if (!formats.length) formats = ['code_128'];
+            }
+
+            const detector = new BarcodeDetector({ formats: formats });
+            setScannerStatus('Scanner ready. Point the camera at the bill barcode.', 'success');
+
+            clearInterval(scanTimer);
+            scanTimer = setInterval(async function() {
+                try {
+                    if (!video.videoWidth || !video.videoHeight) return;
+                    const codes = await detector.detect(video);
+                    if (codes && codes.length) {
+                        clearInterval(scanTimer);
+                        scanTimer = null;
+                        stopScanner();
+                        const scannedValue = codes[0].rawValue || '';
+                        document.getElementById('lastScannedValue').textContent = 'Scanned: ' + scannedValue;
+                        const sm = getScannerModal();
+                        if (sm) sm.hide();
+                        openBillFromScan(scannedValue);
+                    }
+                } catch (err) {}
+            }, 450);
+
+        } catch (err) {
+            setScannerStatus(err.message || 'Unable to open camera scanner.', 'error');
+            scanBusy = false;
+        }
+    }
+
+    function openScannerModal() {
+        const sm = getScannerModal();
+        if (sm) sm.show();
+        setTimeout(startScanner, 350);
+    }
+
+    // ============================================
+    // OPEN BILL FROM SCAN
+    // ============================================
+    async function openBillFromScan(value) {
+        const scanned = String(value || '').trim();
+        if (!scanned) {
+            showMessage('error', 'Enter or scan a bill barcode number.');
+            return;
+        }
+
+        document.getElementById('lastScannedValue').textContent = 'Scanned: ' + scanned;
+        setScannerStatus('Finding bill for barcode: ' + scanned, 'success');
+
+        try {
+            const data = await apiGet({ action: 'search_bill', search: scanned });
+            if (!data.success) {
+                setScannerStatus('No bill found for this barcode.', 'error');
+                showMessage('error', data.message || 'No bill found for this barcode.');
+                return;
+            }
+
+            document.getElementById('billSearch').value = scanned;
+            stopScanner();
+            const sm = getScannerModal();
+            if (sm) sm.hide();
+            searchBill(scanned);
+
+        } catch (e) {
+            setScannerStatus('Unable to connect to API.', 'error');
+            showMessage('error', 'Unable to identify the scanned barcode.');
+        }
+    }
+
+    // ============================================
+    // THERMAL PRINT FUNCTION FOR RETURN/EXCHANGE
+    // ============================================
+    async function sendThermalPrint(printData) {
+        try {
+            const response = await fetch(printServiceUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(printData)
+            });
+            
+            const result = await response.text();
+            console.log('Print response:', result);
+            return { success: true, message: result };
+        } catch (error) {
+            console.error('Print error:', error);
+            return { success: false, message: error.message };
+        }
+    }
+
+    // ============================================
+    // BUILD PRINT DATA - FIXED for Return & Exchange
+    // ============================================
+    function buildPrintData(data, printType) {
+        const bill = data.bill || {};
+        const items = data.items || [];
+        
+        // For Return: Use return_items from the response
+        // For Exchange: Use exchange_items from the response
+        let returnItems = data.return_items || data.returnItems || [];
+        let exchangeItems = data.exchange_items || data.exchangeItems || [];
+        
+        // If these are empty, try to extract from the items array
+        if (returnItems.length === 0 && data.items) {
+            returnItems = data.items.filter(function(item) {
+                return item.return_qty && parseFloat(item.return_qty) > 0;
+            });
+        }
+        
+        if (exchangeItems.length === 0 && data.items) {
+            exchangeItems = data.items.filter(function(item) {
+                return item.new_qty && parseFloat(item.new_qty) > 0;
+            });
+        }
+        
+        let printItems = [];
+        let grandTotal = 0;
+        let transactionType = '';
+        
+        if (printType === 'RETURN') {
+            transactionType = 'Return';
+            
+            if (returnItems.length > 0) {
+                printItems = returnItems.map(function(item) {
+                    const qty = toNumber(item.return_qty || item.qty || 0);
+                    const rate = toNumber(item.rate || item.old_rate || item.selling_rate || 0);
+                    const amount = qty * rate;
+                    grandTotal += amount;
+                    
+                    let description = '';
+                    if (item.old_article_no || item.article_no) {
+                        description += item.old_article_no || item.article_no;
+                    }
+                    if (item.old_article_name || item.article_name) {
+                        description += (description ? ' / ' : '') + (item.old_article_name || item.article_name);
+                    }
+                    if (item.old_brand_name || item.brand_name) {
+                        description += (description ? ' / ' : '') + (item.old_brand_name || item.brand_name);
+                    }
+                    if (item.old_size || item.size) {
+                        description += (description ? ' / ' : '') + 'Size ' + (item.old_size || item.size);
+                    }
+                    if (item.old_color || item.color) {
+                        description += (description ? ' / ' : '') + 'Color ' + (item.old_color || item.color);
+                    }
+                    
+                    return {
+                        Name: item.old_article_name || item.article_name || 'Returned Item',
+                        Description: description || 'Returned product',
+                        Qty: qty,
+                        Rate: rate,
+                        Amount: amount
+                    };
+                });
+            } else {
+                printItems = items.map(function(item) {
+                    const qty = toNumber(item.qty || 0);
+                    const rate = toNumber(item.rate || item.selling_rate || 0);
+                    const amount = qty * rate;
+                    grandTotal += amount;
+                    
+                    let description = '';
+                    if (item.article_no) description += item.article_no;
+                    if (item.brand_name) description += (description ? ' / ' : '') + item.brand_name;
+                    if (item.size) description += (description ? ' / ' : '') + 'Size ' + item.size;
+                    if (item.color) description += (description ? ' / ' : '') + 'Color ' + item.color;
+                    
+                    return {
+                        Name: item.article_name || item.name || 'Item',
+                        Description: description || 'Returned item',
+                        Qty: qty,
+                        Rate: rate,
+                        Amount: amount
+                    };
+                });
+            }
+        } else if (printType === 'EXCHANGE') {
+            transactionType = 'Exchange';
+            
+            if (exchangeItems.length > 0) {
+                printItems = exchangeItems.map(function(item) {
+                    const qty = toNumber(item.new_qty || item.qty || 0);
+                    const rate = toNumber(item.new_rate || item.selling_rate || 0);
+                    const amount = qty * rate;
+                    grandTotal += amount;
+                    
+                    let description = '';
+                    if (item.new_article_no || item.article_no) {
+                        description += item.new_article_no || item.article_no;
+                    }
+                    if (item.new_article_name || item.article_name) {
+                        description += (description ? ' / ' : '') + (item.new_article_name || item.article_name);
+                    }
+                    if (item.new_brand_name || item.brand_name) {
+                        description += (description ? ' / ' : '') + (item.new_brand_name || item.brand_name);
+                    }
+                    if (item.new_size || item.size) {
+                        description += (description ? ' / ' : '') + 'Size ' + (item.new_size || item.size);
+                    }
+                    if (item.new_color || item.color) {
+                        description += (description ? ' / ' : '') + 'Color ' + (item.new_color || item.color);
+                    }
+                    
+                    return {
+                        Name: item.new_article_name || item.article_name || 'Exchange Item',
+                        Description: description || 'Exchanged product',
+                        Qty: qty,
+                        Rate: rate,
+                        Amount: amount
+                    };
+                });
+            } else {
+                printItems = items.map(function(item) {
+                    const qty = toNumber(item.qty || 0);
+                    const rate = toNumber(item.rate || item.selling_rate || 0);
+                    const amount = qty * rate;
+                    grandTotal += amount;
+                    
+                    let description = '';
+                    if (item.article_no) description += item.article_no;
+                    if (item.brand_name) description += (description ? ' / ' : '') + item.brand_name;
+                    if (item.size) description += (description ? ' / ' : '') + 'Size ' + item.size;
+                    if (item.color) description += (description ? ' / ' : '') + 'Color ' + item.color;
+                    
+                    return {
+                        Name: item.article_name || item.name || 'Item',
+                        Description: description || 'Exchanged item',
+                        Qty: qty,
+                        Rate: rate,
+                        Amount: amount
+                    };
+                });
+            }
+        } else {
+            transactionType = 'Sale';
+            printItems = items.map(function(item) {
+                const qty = toNumber(item.qty || 0);
+                const rate = toNumber(item.rate || item.selling_rate || 0);
+                const amount = qty * rate;
+                grandTotal += amount;
+                
+                let description = '';
+                if (item.article_no) description += item.article_no;
+                if (item.brand_name) description += (description ? ' / ' : '') + item.brand_name;
+                if (item.size) description += (description ? ' / ' : '') + 'Size ' + item.size;
+                if (item.color) description += (description ? ' / ' : '') + 'Color ' + item.color;
+                
+                return {
+                    Name: item.article_name || item.name || 'Item',
+                    Description: description,
+                    Qty: qty,
+                    Rate: rate,
+                    Amount: amount
+                };
+            });
+        }
+
+        let refundAmount = toNumber(data.refund_amount || 0);
+        let extraCollect = toNumber(data.extra_collect_amount || 0);
+        let paidAmount = refundAmount > 0 ? refundAmount : grandTotal;
+        let balanceAmount = extraCollect > 0 ? extraCollect : 0;
+
+        let paymentStatus = 'COMPLETED';
+        let branchDisplay = bill.branch_name || '';
+        if (bill.floor_name) branchDisplay += ' ' + bill.floor_name;
+
+        let collectedBy = data.collected_by || '';
+
+        return {
+            "PrintType": printType,
+            "ShopName": "GK FOOTWEAR",
+            "Address": "Gandhi Nagar, Krishnagiri.",
+            "InvoiceTitle": printType === 'RETURN' ? 'RETURN INVOICE' : (printType === 'EXCHANGE' ? 'EXCHANGE INVOICE' : 'BILL OF SUPPLY'),
+            "BillNo": data.transaction_no || bill.bill_no || '',
+            "OrderNo": bill.order_no || 'ORD-' + (bill.bill_no || ''),
+            "Date": new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'2-digit', year:'numeric' }),
+            "Time": new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }),
+            "Customer": bill.customer_name || 'Walk-in Customer',
+            "Branch": branchDisplay || 'N/A',
+            "Salesman": bill.created_by_name || 'Sales User',
+            "CollectedBy": collectedBy || 'N/A',
+            "TransactionType": transactionType,
+            "PaymentStatus": paymentStatus,
+            "PaymentMethod": data.payment_method || 'Cash',
+            "GrandTotal": grandTotal,
+            "Paid": paidAmount,
+            "Balance": balanceAmount,
+            "Barcode": data.barcode || bill.bill_barcode || bill.barcode_value || data.transaction_no || '',
+            "Items": printItems
+        };
+    }
+
+    // ============================================
+    // SUBMIT RETURN - UPDATED with proper return items
+    // ============================================
+    async function submitReturn() {
+        if (!returnExchangeState.bill) {
+            showMessage('warning', 'Please search and select a bill first.');
+            return;
+        }
+
+        const items = [];
+        const returnItems = [];
+        document.querySelectorAll('.js-return-select').forEach(function(box){
+            if (!box.checked) return;
+            const id = box.dataset.id;
+            const item = itemById(id);
+            const qty = toNumber((document.querySelector('.js-return-qty[data-id="'+id+'"]') || {}).value);
+            if (item && qty > 0) {
+                const rate = lineRate(item);
+                const amount = qty * rate;
+                
+                items.push({ 
+                    bill_item_id: parseInt(id,10), 
+                    return_qty: qty,
+                    article_no: item.article_no,
+                    article_name: item.article_name,
+                    brand_name: item.brand_name,
+                    size: item.size,
+                    color: item.color,
+                    selling_rate: rate
+                });
+                
+                returnItems.push({
+                    old_article_no: item.article_no,
+                    old_article_name: item.article_name,
+                    old_brand_name: item.brand_name,
+                    old_size: item.size,
+                    old_color: item.color,
+                    return_qty: qty,
+                    old_rate: rate,
+                    return_amount: amount,
+                    return_note: 'Returned item'
+                });
+            }
+        });
+
+        if (!items.length) {
+            showMessage('warning', 'Select at least one product to return.');
+            return;
+        }
+
+        if (!window.confirm('Confirm selected product return?')) return;
+
+        try {
+            const data = await apiPost({
+                action: 'create_return',
+                bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
+                refund_option: document.getElementById('returnRefundOption').value,
+                notes: document.getElementById('returnNotes').value,
+                items: items,
+                return_items: returnItems
+            });
+
+            if (!data.success) {
+                showMessage('error', data.message || 'Unable to create return.');
+                return;
+            }
+
+            showMessage('success', data.message || 'Return completed.');
+
+            const printData = buildPrintData({
+                ...data,
+                return_items: returnItems,
+                collected_by: <?= json_encode($cashierName) ?>
+            }, 'RETURN');
+            
+            const printResult = await sendThermalPrint(printData);
+            if (printResult.success) {
+                console.log('Thermal print sent successfully for Return');
+                showMessage('success', 'Return invoice sent to thermal printer.');
+            } else {
+                console.warn('Thermal print failed:', printResult.message);
+                showMessage('warning', 'Return completed but thermal print failed. Please check printer connection.');
+            }
+
+            loadRecentHistory(true);
+            searchBill(returnExchangeState.bill.bill_no);
+        } catch (error) {
+            showMessage('error', 'Unable to connect Return & Exchange API.');
+        }
+    }
+
+    // ============================================
+    // SUBMIT EXCHANGE - UPDATED with proper exchange items
+    // ============================================
+    async function submitExchange() {
+        if (!returnExchangeState.bill) {
+            showMessage('warning', 'Please search and select a bill first.');
+            return;
+        }
+
+        const checkedRows = Array.from(document.querySelectorAll('.js-exchange-select')).filter(function(box){ return box.checked; });
+
+        for (const box of checkedRows) {
+            const id = String(box.dataset.id || '');
+            const input = document.querySelector('.js-product-search[data-id="'+id+'"]');
+            if (!returnExchangeState.selectedProducts[id] && input && input.value.trim()) {
+                const products = await findProduct(id, true);
+                if (products.length === 1) {
+                    selectExchangeProduct(id, products[0]);
+                }
+            }
+        }
+
+        const items = [];
+        const exchangeItems = [];
+        let hasOldProduct = false;
+        let missingNewProduct = false;
+        let invalidQty = false;
+        let missingActiveBarcode = false;
+
+        document.querySelectorAll('.js-exchange-select').forEach(function(box){
+            if (!box.checked) return;
+            hasOldProduct = true;
+
+            const id = String(box.dataset.id || '');
+            const item = itemById(id);
+            const product = returnExchangeState.selectedProducts[id];
+            const oldQtyInput = document.querySelector('.js-exchange-old-qty[data-id="'+id+'"]');
+            const newQtyInput = document.querySelector('.js-exchange-new-qty[data-id="'+id+'"]');
+
+            const oldQty = toNumber((oldQtyInput || {}).value);
+            const newQty = toNumber((newQtyInput || {}).value);
+
+            if (!product) {
+                missingNewProduct = true;
+                return;
+            }
+
+            if (!parseInt(product.barcode_id || 0, 10)) {
+                missingActiveBarcode = true;
+                return;
+            }
+
+            if (!item || oldQty <= 0 || newQty <= 0) {
+                invalidQty = true;
+                return;
+            }
+
+            const maxOldQty = returnableQty(item);
+            const maxNewQty = toNumber(product.available_qty);
+
+            if (oldQty > maxOldQty || newQty > maxNewQty) {
+                invalidQty = true;
+                return;
+            }
+
+            const oldRate = lineRate(item);
+            const newRate = toNumber(product.selling_rate);
+
+            items.push({
+                bill_item_id: parseInt(id,10),
+                return_qty: oldQty,
+                new_stock_item_id: parseInt(product.stock_item_id,10),
+                new_barcode_id: parseInt(product.barcode_id || 0,10),
+                new_qty: newQty
+            });
+
+            exchangeItems.push({
+                old_article_no: item.article_no,
+                old_article_name: item.article_name,
+                old_brand_name: item.brand_name,
+                old_size: item.size,
+                old_color: item.color,
+                old_rate: oldRate,
+                old_qty: oldQty,
+                new_article_no: product.article_no,
+                new_article_name: product.article_name,
+                new_brand_name: product.brand_name,
+                new_size: product.size,
+                new_color: product.color,
+                new_rate: newRate,
+                new_qty: newQty,
+                exchange_note: 'Exchanged from ' + (item.article_no || '') + ' to ' + (product.article_no || '')
+            });
+        });
+
+        if (!hasOldProduct) {
+            showMessage('warning', 'Please tick/select the old product to exchange.');
+            return;
+        }
+
+        if (missingNewProduct) {
+            showMessage('warning', 'Please select the new product. Enter barcode/article and click Find, or press Enter.');
+            return;
+        }
+
+        if (missingActiveBarcode) {
+            showMessage('warning', 'Selected new product has no active barcode. Please choose another product or generate barcode in Stock Inward / Stock List.');
+            return;
+        }
+
+        if (invalidQty || !items.length) {
+            showMessage('warning', 'Please enter valid old quantity and new quantity for exchange.');
+            return;
+        }
+
+        if (!window.confirm('Confirm selected product exchange?')) return;
+
+        try {
+            const data = await apiPost({
+                action: 'create_exchange',
+                bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
+                refund_option: document.getElementById('exchangeRefundOption').value,
+                collect_option: document.getElementById('exchangeCollectOption').value,
+                notes: document.getElementById('exchangeNotes').value,
+                items: items,
+                exchange_items: exchangeItems
+            });
+
+            if (!data.success) {
+                showMessage('error', data.message || 'Unable to create exchange.');
+                return;
+            }
+
+            showMessage('success', data.message || 'Exchange completed.');
+
+            const printData = buildPrintData({
+                ...data,
+                exchange_items: exchangeItems,
+                collected_by: <?= json_encode($cashierName) ?>
+            }, 'EXCHANGE');
+            
+            const printResult = await sendThermalPrint(printData);
+            if (printResult.success) {
+                console.log('Thermal print sent successfully for Exchange');
+                showMessage('success', 'Exchange invoice sent to thermal printer.');
+            } else {
+                console.warn('Thermal print failed:', printResult.message);
+                showMessage('warning', 'Exchange completed but thermal print failed. Please check printer connection.');
+            }
+
+            loadRecentHistory(true);
+            searchBill(returnExchangeState.bill.bill_no);
+        } catch (error) {
+            showMessage('error', 'Unable to connect Return & Exchange API.');
+        }
+    }
+
+    // ============================================
+    // EXISTING FUNCTIONS
+    // ============================================
     const billHistoryKey = 'gk_return_exchange_bill_search_history';
     const productHistoryKey = 'gk_return_exchange_product_search_history';
 
@@ -612,9 +1273,51 @@ if ($businessId <= 0) {
                     '</div>' +
                     '<div class="text-md-end"><div class="amount-due">Refund '+money.format(toNumber(row.refund_amount))+'</div><div class="amount-positive">Extra '+money.format(toNumber(row.extra_collect_amount))+'</div></div>' +
                 '</div>' +
-                '<div class="mt-2"><a class="btn btn-outline-dark btn-sm rounded-pill fw-bold" target="_blank" rel="noopener" href="return-exchange-print.php?id='+parseInt(row.return_exchange_id,10)+'"><i data-lucide="printer" style="width:13px;height:13px"></i> Print Invoice</a></div>' +
+                '<div class="mt-2"><button type="button" class="btn btn-outline-success btn-sm rounded-pill fw-bold js-reprint-history" data-id="'+parseInt(row.return_exchange_id,10)+'" data-type="'+escapeHtml(row.transaction_type || '')+'"><i data-lucide="printer" style="width:13px;height:13px"></i> Reprint</button></div>' +
             '</div>';
         }).join('') + '</div>';
+    }
+
+    // ============================================
+    // REPRINT HISTORY FUNCTION - Direct thermal print
+    // ============================================
+    async function reprintHistory(returnExchangeId, type) {
+        returnExchangeId = parseInt(returnExchangeId || 0, 10);
+        if (!returnExchangeId) {
+            showMessage('warning', 'Invalid return/exchange ID.');
+            return;
+        }
+
+        try {
+            const data = await apiGet({ 
+                action: 'get_return_exchange', 
+                id: returnExchangeId,
+                _ts: Date.now()
+            });
+
+            if (!data.success) {
+                showMessage('error', data.message || 'Unable to fetch return/exchange details.');
+                return;
+            }
+
+            const printType = String(type || data.transaction_type || 'RETURN').toUpperCase();
+            
+            // Build print data
+            const printData = buildPrintData({
+                ...data,
+                collected_by: <?= json_encode($cashierName) ?>
+            }, printType);
+
+            const result = await sendThermalPrint(printData);
+            if (result.success) {
+                showMessage('success', 'Return/Exchange invoice sent to thermal printer.');
+            } else {
+                showMessage('warning', 'Print failed: ' + result.message);
+            }
+
+        } catch (error) {
+            showMessage('error', 'Unable to fetch return/exchange details for reprint.');
+        }
     }
 
     function renderHistory() {
@@ -845,170 +1548,9 @@ if ($businessId <= 0) {
         }
     }
 
-    async function submitReturn() {
-        if (!returnExchangeState.bill) return;
-
-        const items = [];
-        document.querySelectorAll('.js-return-select').forEach(function(box){
-            if (!box.checked) return;
-            const id = box.dataset.id;
-            const item = itemById(id);
-            const qty = toNumber((document.querySelector('.js-return-qty[data-id="'+id+'"]') || {}).value);
-            if (item && qty > 0) {
-                items.push({ bill_item_id: parseInt(id,10), return_qty: qty });
-            }
-        });
-
-        if (!items.length) {
-            showMessage('warning', 'Select at least one product to return.');
-            return;
-        }
-
-        if (!window.confirm('Confirm selected product return?')) return;
-
-        try {
-            const data = await apiPost({
-                action: 'create_return',
-                bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
-                refund_option: document.getElementById('returnRefundOption').value,
-                notes: document.getElementById('returnNotes').value,
-                items: items
-            });
-
-            if (!data.success) {
-                showMessage('error', data.message || 'Unable to create return.');
-                return;
-            }
-
-            showMessage('success', data.message || 'Return completed.');
-            window.open('return-exchange-print.php?id=' + parseInt(data.return_exchange_id,10), '_blank', 'noopener');
-            loadRecentHistory(true);
-            searchBill(returnExchangeState.bill.bill_no);
-        } catch (error) {
-            showMessage('error', 'Unable to connect Return & Exchange API.');
-        }
-    }
-
-    async function submitExchange() {
-        if (!returnExchangeState.bill) return;
-
-        /*
-         * Exchange validation fix:
-         * 1. If user searches/scans a new product and clicks Confirm without pressing Find,
-         *    system will find/select the new product automatically.
-         * 2. When new product is selected, the old product checkbox is checked automatically.
-         * 3. User gets exact missing-field warning instead of generic error.
-         */
-        const checkedRows = Array.from(document.querySelectorAll('.js-exchange-select')).filter(function(box){ return box.checked; });
-
-        for (const box of checkedRows) {
-            const id = String(box.dataset.id || '');
-            const input = document.querySelector('.js-product-search[data-id="'+id+'"]');
-            if (!returnExchangeState.selectedProducts[id] && input && input.value.trim()) {
-                const products = await findProduct(id, true);
-                if (products.length === 1) {
-                    selectExchangeProduct(id, products[0]);
-                }
-            }
-        }
-
-        const items = [];
-        let hasOldProduct = false;
-        let missingNewProduct = false;
-        let invalidQty = false;
-        let missingActiveBarcode = false;
-
-        document.querySelectorAll('.js-exchange-select').forEach(function(box){
-            if (!box.checked) return;
-            hasOldProduct = true;
-
-            const id = String(box.dataset.id || '');
-            const item = itemById(id);
-            const product = returnExchangeState.selectedProducts[id];
-            const oldQtyInput = document.querySelector('.js-exchange-old-qty[data-id="'+id+'"]');
-            const newQtyInput = document.querySelector('.js-exchange-new-qty[data-id="'+id+'"]');
-
-            const oldQty = toNumber((oldQtyInput || {}).value);
-            const newQty = toNumber((newQtyInput || {}).value);
-
-            if (!product) {
-                missingNewProduct = true;
-                return;
-            }
-
-            if (!parseInt(product.barcode_id || 0, 10)) {
-                missingActiveBarcode = true;
-                return;
-            }
-
-            if (!item || oldQty <= 0 || newQty <= 0) {
-                invalidQty = true;
-                return;
-            }
-
-            const maxOldQty = returnableQty(item);
-            const maxNewQty = toNumber(product.available_qty);
-
-            if (oldQty > maxOldQty || newQty > maxNewQty) {
-                invalidQty = true;
-                return;
-            }
-
-            items.push({
-                bill_item_id: parseInt(id,10),
-                return_qty: oldQty,
-                new_stock_item_id: parseInt(product.stock_item_id,10),
-                new_barcode_id: parseInt(product.barcode_id || 0,10),
-                new_qty: newQty
-            });
-        });
-
-        if (!hasOldProduct) {
-            showMessage('warning', 'Please tick/select the old product to exchange.');
-            return;
-        }
-
-        if (missingNewProduct) {
-            showMessage('warning', 'Please select the new product. Enter barcode/article and click Find, or press Enter.');
-            return;
-        }
-
-        if (missingActiveBarcode) {
-            showMessage('warning', 'Selected new product has no active barcode. Please choose another product or generate barcode in Stock Inward / Stock List.');
-            return;
-        }
-
-        if (invalidQty || !items.length) {
-            showMessage('warning', 'Please enter valid old quantity and new quantity for exchange.');
-            return;
-        }
-
-        if (!window.confirm('Confirm selected product exchange?')) return;
-
-        try {
-            const data = await apiPost({
-                action: 'create_exchange',
-                bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
-                refund_option: document.getElementById('exchangeRefundOption').value,
-                collect_option: document.getElementById('exchangeCollectOption').value,
-                notes: document.getElementById('exchangeNotes').value,
-                items: items
-            });
-
-            if (!data.success) {
-                showMessage('error', data.message || 'Unable to create exchange.');
-                return;
-            }
-
-            showMessage('success', data.message || 'Exchange completed.');
-            window.open('return-exchange-print.php?id=' + parseInt(data.return_exchange_id,10), '_blank', 'noopener');
-            loadRecentHistory(true);
-            searchBill(returnExchangeState.bill.bill_no);
-        } catch (error) {
-            showMessage('error', 'Unable to connect Return & Exchange API.');
-        }
-    }
-
+    // ============================================
+    // WINDOW FUNCTIONS
+    // ============================================
     window.changeWorkTab = function(tab) {
         returnExchangeState.tab = tab;
         document.querySelectorAll('.return-tab-btn').forEach(function(btn){ btn.classList.toggle('active', btn.dataset.tab === tab); });
@@ -1027,7 +1569,11 @@ if ($businessId <= 0) {
         }
         loadRecentHistory(false);
     };
+    window.reprintHistory = reprintHistory;
 
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
     document.getElementById('searchBillForm').addEventListener('submit', function(e){
         e.preventDefault();
         const term = document.getElementById('billSearch').value.trim();
@@ -1050,6 +1596,52 @@ if ($businessId <= 0) {
         loadRecentHistory(true);
     });
 
+    // ============================================
+    // SCANNER BUTTON EVENT
+    // ============================================
+    document.getElementById('scanBillCameraBtn').addEventListener('click', openScannerModal);
+
+    // ============================================
+    // MANUAL SCAN
+    // ============================================
+    document.getElementById('manualScanBtn').addEventListener('click', function(){
+        const value = document.getElementById('manualScanValue').value.trim();
+        if (!value) {
+            showMessage('warning', 'Enter or scan a bill barcode number.');
+            return;
+        }
+        const sm = getScannerModal();
+        if (sm) sm.hide();
+        openBillFromScan(value);
+    });
+
+    document.getElementById('manualScanValue').addEventListener('keydown', function(e){
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('manualScanBtn').click();
+        }
+    });
+
+    // ============================================
+    // SCANNER MODAL EVENTS
+    // ============================================
+    document.getElementById('scannerModal').addEventListener('hidden.bs.modal', function(){
+        stopScanner();
+    });
+
+    document.getElementById('restartScannerBtn').addEventListener('click', function(){
+        stopScanner();
+        setTimeout(startScanner, 300);
+    });
+
+    document.getElementById('stopScannerBtn').addEventListener('click', function(){
+        stopScanner();
+        setScannerStatus('Camera stopped. Click Restart Scanner to scan again.');
+    });
+
+    // ============================================
+    // OTHER EVENT LISTENERS
+    // ============================================
     document.addEventListener('input', function(e){
         if (e.target.matches('.js-return-qty')) calculateReturnTotal();
         if (e.target.matches('.js-exchange-old-qty,.js-exchange-new-qty')) calculateExchangeTotal();
@@ -1128,8 +1720,20 @@ if ($businessId <= 0) {
             e.preventDefault();
             findProduct(findBtn.dataset.id);
         }
+
+        const reprintBtn = e.target.closest('.js-reprint-history');
+        if (reprintBtn) {
+            e.preventDefault();
+            const id = parseInt(reprintBtn.dataset.id, 10);
+            const type = reprintBtn.dataset.type || 'RETURN';
+            reprintHistory(id, type);
+            return;
+        }
     });
 
+    // ============================================
+    // SCAN BILL BARCODE (Focus Input)
+    // ============================================
     const scanBillBarcodeBtn = document.getElementById('scanBillBarcode');
     if (scanBillBarcodeBtn) {
         scanBillBarcodeBtn.addEventListener('click', function(){
@@ -1147,6 +1751,9 @@ if ($businessId <= 0) {
         });
     }
 
+    // ============================================
+    // INITIALIZATION
+    // ============================================
     renderBill();
     renderBillSearchHistory();
     loadRecentHistory(true);
