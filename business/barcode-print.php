@@ -4,6 +4,7 @@
  * Place at: business/barcode-print.php
  *
  * Prints unique stock barcodes for one stock inward product row.
+ * Uses .NET Thermal Printer Service for direct label printing.
  * Default print quantity = current available stock quantity.
  */
 
@@ -265,6 +266,9 @@ function bp_ensure_barcodes(mysqli $conn, array $item, int $requiredQty): void
     }
 }
 
+// ============================================
+// CODE128 BARCODE SVG GENERATOR
+// ============================================
 function bp_code128_svg(string $text, int $height = 48): string
 {
     $patterns = [
@@ -328,6 +332,151 @@ function bp_code128_svg(string $text, int $height = 48): string
     return '<svg class="barcode-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . number_format($width, 2, '.', '') . ' ' . $height . '" preserveAspectRatio="none">' . $bars . '</svg>';
 }
 
+// ============================================
+// CHECK IF THERMAL PRINTER SERVICE IS RUNNING
+// ============================================
+function bp_check_printer_service(): array
+{
+    $result = [
+        'running' => false,
+        'message' => '',
+        'port' => 17900
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "http://127.0.0.1:17900/");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["PrintType" => "PING"]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+    
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($error) {
+        $result['message'] = 'Printer service not running: ' . $error;
+        return $result;
+    }
+
+    if ($httpCode == 200 || $httpCode == 0) {
+        $result['running'] = true;
+        $result['message'] = 'Printer service is running.';
+    } else {
+        $result['message'] = 'Printer service returned HTTP ' . $httpCode;
+    }
+
+    return $result;
+}
+
+// ============================================
+// SEND BARCODES TO .NET THERMAL PRINTER
+// ============================================
+function bp_send_to_thermal_printer(array $barcodes, array $item): void
+{
+    if (empty($barcodes)) {
+        return;
+    }
+
+    $check = bp_check_printer_service();
+    if (!$check['running']) {
+        throw new RuntimeException(
+            'Thermal printer service is not running. Please start the GK Thermal Print Service. ' .
+            'Error: ' . $check['message']
+        );
+    }
+
+    // Build print data for .NET service - Simplified for barcode labels
+    $printData = [
+        "PrintType" => "BARCODE_LABEL",
+        "ShopName" => "GK FOOTWEAR",
+        "Address" => "Gandhi Nagar, Krishnagiri.",
+        "BillNo" => $item['batch_no'] ?? 'BATCH-' . $item['batch_id'],
+        "OrderNo" => $item['article_no'] ?? '',
+        "Customer" => "Stock Barcode",
+        "Branch" => $item['branch_name'] ?? '',
+        "Salesman" => $_SESSION['name'] ?? $_SESSION['username'] ?? 'Stock Manager',
+        "PaymentStatus" => "STOCK",
+        "GrandTotal" => (float)($item['mrp_rate'] ?? 0),
+        "Items" => []
+    ];
+
+    foreach ($barcodes as $barcodeRow) {
+        // Build product name with size and color
+        $productName = ($item['article_name'] ?? $item['article_no'] ?? 'Product');
+        $size = $item['size'] ?? '';
+        $color = $item['color'] ?? '';
+        
+        // Create description with size and color
+        $description = '';
+        if (!empty($size)) {
+            $description .= 'Size: ' . $size;
+        }
+        if (!empty($color)) {
+            if (!empty($description)) $description .= ' | ';
+            $description .= 'Color: ' . $color;
+        }
+
+        $printData['Items'][] = [
+            "Name" => $productName,
+            "Description" => $description,
+            "Qty" => 1,
+            "Rate" => (float)($item['mrp_rate'] ?? 0),
+            "BarcodeValue" => $barcodeRow['barcode_value']
+        ];
+    }
+
+    // Send to .NET thermal printer service with retry
+    $maxRetries = 2;
+    $retryDelay = 500;
+    
+    for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+        if ($attempt > 0) {
+            usleep($retryDelay * 1000);
+        }
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, "http://127.0.0.1:17900/");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($printData));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Content-Type: application/json"]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if (!$error && $httpCode == 200 && strpos($response, 'PRINT_SUCCESS') !== false) {
+            return;
+        }
+        
+        if (strpos($error, 'Couldn\'t connect') !== false || strpos($error, 'Connection refused') !== false) {
+            if ($attempt < $maxRetries) {
+                continue;
+            }
+        }
+        
+        if ($error) {
+            throw new RuntimeException(
+                'Thermal printer service error (attempt ' . ($attempt + 1) . '): ' . $error . 
+                '. Please ensure the GK Thermal Print Service is running.'
+            );
+        }
+        
+        if (strpos($response, 'PRINT_SUCCESS') === false) {
+            throw new RuntimeException(
+                'Thermal printer service returned: ' . ($response ?: 'Empty response')
+            );
+        }
+    }
+}
+
 try {
     $businessId = bp_business_id();
     $stockItemId = (int)($_GET['stock_item_id'] ?? 0);
@@ -383,12 +532,10 @@ try {
         throw new RuntimeException('Current stock quantity is zero. Barcode labels cannot be printed.');
     }
 
-    // Ensure old/migrated items also have one active barcode for each current stock quantity.
     bp_ensure_barcodes($conn, $item, $availableQty);
 
-    $requestedQty = (int)($_GET['qty'] ?? $availableQty);
-    $printQty = max(1, min($requestedQty, $availableQty));
-
+    // Load every active barcode for this stock item so the user can select
+    // the first labels, last labels, or any individual combination.
     $barcodes = bp_rows($conn, "
         SELECT barcode_id, barcode_value
         FROM stock_barcodes
@@ -397,12 +544,62 @@ try {
           AND barcode_status = 'active'
         ORDER BY barcode_id ASC
         LIMIT ?
-    ", 'iii', [$businessId, $stockItemId, $printQty]);
+    ", 'iii', [$businessId, $stockItemId, $availableQty]);
 
     if (!$barcodes) {
         throw new RuntimeException('No active barcodes found for this product.');
     }
+
+    $printQty = count($barcodes);
+    $isPrintRequest = isset($_GET['print_thermal']) && $_GET['print_thermal'] == '1';
+
+    if ($isPrintRequest) {
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $selectedRaw = trim((string)($_GET['selected_ids'] ?? ''));
+        if ($selectedRaw === '') {
+            throw new RuntimeException('Please select at least one barcode label.');
+        }
+
+        $selectedIds = array_values(array_unique(array_filter(
+            array_map('intval', explode(',', $selectedRaw)),
+            static fn(int $id): bool => $id > 0
+        )));
+
+        if (!$selectedIds) {
+            throw new RuntimeException('The selected barcode list is invalid.');
+        }
+
+        // Filter against the already-authorized barcode rows. Never trust IDs
+        // supplied by the browser without checking business and stock ownership.
+        $selectedLookup = array_fill_keys($selectedIds, true);
+        $selectedBarcodes = array_values(array_filter(
+            $barcodes,
+            static fn(array $row): bool => isset($selectedLookup[(int)$row['barcode_id']])
+        ));
+
+        if (!$selectedBarcodes) {
+            throw new RuntimeException('None of the selected barcodes belong to this product.');
+        }
+
+        if (count($selectedBarcodes) !== count($selectedIds)) {
+            throw new RuntimeException('One or more selected barcodes are invalid or inactive.');
+        }
+
+        bp_send_to_thermal_printer($selectedBarcodes, $item);
+        echo json_encode([
+            'success' => true,
+            'message' => count($selectedBarcodes) . ' selected barcode label(s) sent to the thermal printer.'
+        ]);
+        exit;
+    }
+
 } catch (Throwable $e) {
+    if (isset($_GET['print_thermal']) && $_GET['print_thermal'] == '1') {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+    
     http_response_code(400);
     echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Barcode Print Error</title><style>body{font-family:Arial;padding:30px;background:#f8fafc;color:#0f172a}.box{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;max-width:650px;margin:auto}.err{color:#dc2626;font-weight:800}</style></head><body><div class="box"><h2>Barcode Print Error</h2><p class="err">' . bp_e($e->getMessage()) . '</p><button onclick="history.back()">Go Back</button></div></body></html>';
     exit;
@@ -449,10 +646,19 @@ $pageTitle = 'Barcode Print - ' . $article;
         .toolbar h1 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: -.02em; }
         .toolbar p { margin: 2px 0 0; font-size: 12px; color: #64748b; }
         .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .controls input { width: 90px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px 8px; font-weight: 900; }
+        .controls input[type="number"] { width: 90px; min-height: 34px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 6px 8px; font-weight: 900; }
+        .selection-summary { font-size: 12px; font-weight: 900; color: #1d4ed8; padding: 6px 10px; background: #eff6ff; border-radius: 999px; }
+        .label-select { position: absolute; top: 2mm; left: 2mm; width: 18px; height: 18px; cursor: pointer; accent-color: #2563eb; z-index: 2; }
+        .label { position: relative; cursor: pointer; transition: box-shadow .15s ease, border-color .15s ease, opacity .15s ease; }
+        .label.selected { border-color: #2563eb; box-shadow: 0 0 0 1.2mm rgba(37, 99, 235, .16); }
+        .label.not-selected { opacity: .48; }
+        .selection-no { position: absolute; top: 2mm; right: 2mm; border-radius: 999px; background: #e2e8f0; color: #334155; font-size: 9px; font-weight: 900; padding: 2px 6px; }
         .btn { border: 0; border-radius: 999px; min-height: 34px; padding: 8px 13px; font-weight: 900; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
         .btn-primary { background: #2563eb; color: #fff; }
+        .btn-success { background: #16a34a; color: #fff; }
         .btn-dark { background: #111827; color: #fff; }
+        .btn-secondary { background: #e2e8f0; color: #0f172a; }
+        .btn-sm { min-height: 30px; padding: 4px 10px; font-size: 11px; }
         .sheet {
             padding: 14px;
             width: 100%;
@@ -554,6 +760,52 @@ $pageTitle = 'Barcode Print - ' . $article;
             white-space: nowrap;
             color: #020617;
         }
+        /* Toast Container */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .toast {
+            background: #fff;
+            border: 1px solid #dbe4f0;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .15);
+            padding: 14px 18px;
+            min-width: 260px;
+            max-width: 380px;
+            animation: slideIn 0.3s ease;
+            margin-bottom: 10px;
+        }
+        .toast.success { border-left: 4px solid #16a34a; }
+        .toast.error { border-left: 4px solid #dc2626; }
+        .toast.warning { border-left: 4px solid #f59e0b; }
+        .toast .title { font-weight: 700; font-size: 13px; color: #0f172a; }
+        .toast .message { font-size: 11px; color: #64748b; margin-top: 3px; }
+        .toast .close-btn { float: right; background: none; border: none; font-size: 18px; cursor: pointer; color: #94a3b8; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+        .printer-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 900;
+        }
+        .printer-status.online { background: #dcfce7; color: #15803d; }
+        .printer-status.offline { background: #fee2e2; color: #b91c1c; }
+        .printer-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .printer-status.online .dot { background: #16a34a; }
+        .printer-status.offline .dot { background: #dc2626; }
+
         @media screen and (max-width: 980px) {
             .labels { grid-template-columns: repeat(2, var(--label-w)); }
         }
@@ -563,6 +815,10 @@ $pageTitle = 'Barcode Print - ' . $article;
         @media print {
             body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { display: none !important; }
+            .toast-container { display: none !important; }
+            .label-select, .selection-no { display: none !important; }
+            .label.not-selected { display: none !important; }
+            .label.selected { box-shadow: none; border-color: #94a3b8; opacity: 1; }
             .sheet { padding: 0; }
             .labels {
                 grid-template-columns: repeat(3, var(--label-w));
@@ -583,22 +839,42 @@ $pageTitle = 'Barcode Print - ' . $article;
     <div class="toolbar">
         <div>
             <h1>Barcode Label Print</h1>
-            <p><?= bp_e($item['article_no']) ?> · Available Stock: <?= (int)$availableQty ?> · Printing: <?= (int)$printQty ?></p>
+            <p><?= bp_e($item['article_no']) ?> · Available Labels: <?= count($barcodes) ?> · Select only the labels you need</p>
         </div>
-        <form method="get" class="controls">
+        <form method="get" class="controls" id="barcodeForm" onsubmit="return false;">
             <input type="hidden" name="stock_item_id" value="<?= (int)$stockItemId ?>">
-            <label for="qty"><b>Qty</b></label>
-            <input type="number" id="qty" name="qty" min="1" max="<?= (int)$availableQty ?>" value="<?= (int)$printQty ?>">
-            <button type="submit" class="btn btn-dark">Update</button>
-            <button type="button" class="btn btn-primary" onclick="window.print()">Print Barcode</button>
-            <button type="button" class="btn btn-dark" onclick="window.close()">Close</button>
+            <label for="selectionCount"><b>Count</b></label>
+            <input type="number" id="selectionCount" min="1" max="<?= count($barcodes) ?>" value="<?= min(5, count($barcodes)) ?>">
+            <button type="button" class="btn btn-dark btn-sm" id="selectFirstBtn">First</button>
+            <button type="button" class="btn btn-dark btn-sm" id="selectLastBtn">Last</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="selectAllBtn">Select All</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="clearSelectionBtn">Clear</button>
+            <span class="selection-summary" id="selectionSummary">0 selected</span>
+            <button type="button" class="btn btn-success" id="thermalPrintBtn">
+                <i data-lucide="printer"></i> Print Selected
+            </button>
+            <button type="button" class="btn btn-primary" id="pdfPrintBtn">Print Selected PDF</button>
+            <button type="button" class="btn btn-secondary" onclick="window.close()">Close</button>
+            <span id="printerStatus" class="printer-status offline">
+                <span class="dot"></span> Checking...
+            </span>
         </form>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="sheet">
-        <div class="labels">
-            <?php foreach ($barcodes as $barcodeRow): ?>
-                <div class="label">
+        <div class="labels" id="labelsContainer">
+            <?php foreach ($barcodes as $index => $barcodeRow): ?>
+                <div class="label not-selected" data-barcode-id="<?= (int)$barcodeRow['barcode_id'] ?>">
+                    <input
+                        type="checkbox"
+                        class="label-select"
+                        value="<?= (int)$barcodeRow['barcode_id'] ?>"
+                        aria-label="Select barcode <?= bp_e($barcodeRow['barcode_value']) ?>"
+                    >
+                    <span class="selection-no">#<?= (int)($index + 1) ?></span>
                     <div class="label-head">
                         <div class="brand">
                             <span>GK FOOTWEAR</span>
@@ -606,10 +882,8 @@ $pageTitle = 'Barcode Print - ' . $article;
                         </div>
                         <div class="product"><?= bp_e($article) ?></div>
                         <div class="meta">
-                            <span>Article: <b><?= bp_e($item['article_no']) ?></b></span>
                             <span>Size: <b><?= bp_e($item['size']) ?></b></span>
                             <span>Color: <b><?= bp_e($item['color'] ?: '-') ?></b></span>
-                            <span>Batch: <b><?= bp_e($item['batch_no']) ?></b></span>
                         </div>
                     </div>
 
@@ -624,5 +898,188 @@ $pageTitle = 'Barcode Print - ' . $article;
             <?php endforeach; ?>
         </div>
     </div>
+
+    <?php if (file_exists(__DIR__ . '/includes/script.php')) { include __DIR__ . '/includes/script.php'; } ?>
+    <script>
+    (function() {
+        'use strict';
+
+        const thermalPrintBtn = document.getElementById('thermalPrintBtn');
+        const selectionCount = document.getElementById('selectionCount');
+        const selectFirstBtn = document.getElementById('selectFirstBtn');
+        const selectLastBtn = document.getElementById('selectLastBtn');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        const pdfPrintBtn = document.getElementById('pdfPrintBtn');
+        const selectionSummary = document.getElementById('selectionSummary');
+        const labelCards = Array.from(document.querySelectorAll('.label'));
+        const labelCheckboxes = Array.from(document.querySelectorAll('.label-select'));
+        const stockItemId = <?= (int)$stockItemId ?>;
+        const container = document.getElementById('toastContainer');
+        const printerStatus = document.getElementById('printerStatus');
+
+        function showToast(title, message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (type || 'success');
+            toast.innerHTML = `
+                <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+                <div class="title">${title}</div>
+                <div class="message">${message}</div>
+            `;
+            container.appendChild(toast);
+            setTimeout(function() {
+                if (toast.parentElement) toast.remove();
+            }, 8000);
+        }
+
+        function showLoading(btn, loading) {
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Printing...';
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="printer"></i> Print Selected';
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        function updatePrinterStatus(status, message) {
+            printerStatus.className = 'printer-status ' + (status ? 'online' : 'offline');
+            printerStatus.innerHTML = '<span class="dot"></span> ' + (message || (status ? 'Online' : 'Offline'));
+        }
+
+        function checkPrinterStatus() {
+            updatePrinterStatus(false, 'Checking...');
+            
+            fetch('barcode-print.php?stock_item_id=' + stockItemId + '&check_printer=1', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.running) {
+                    updatePrinterStatus(true, 'Online');
+                } else {
+                    updatePrinterStatus(false, data.message || 'Offline');
+                    showToast('⚠️ Printer Offline', 'Thermal printer service is not running. Please start the service.', 'warning');
+                }
+            })
+            .catch(function() {
+                updatePrinterStatus(false, 'Cannot connect');
+            });
+        }
+
+        function updateSelectionUI() {
+            let selectedCount = 0;
+            labelCards.forEach(function(card) {
+                const checkbox = card.querySelector('.label-select');
+                const isSelected = checkbox.checked;
+                card.classList.toggle('selected', isSelected);
+                card.classList.toggle('not-selected', !isSelected);
+                if (isSelected) selectedCount++;
+            });
+            selectionSummary.textContent = selectedCount + ' selected';
+        }
+
+        function selectRange(mode) {
+            const requested = parseInt(selectionCount.value, 10);
+            if (!Number.isFinite(requested) || requested < 1) {
+                showToast('Selection Error', 'Enter a valid label count.', 'error');
+                return;
+            }
+            const count = Math.min(requested, labelCheckboxes.length);
+            labelCheckboxes.forEach(function(cb) { cb.checked = false; });
+            const start = mode === 'last' ? labelCheckboxes.length - count : 0;
+            for (let i = start; i < start + count; i++) {
+                if (labelCheckboxes[i]) labelCheckboxes[i].checked = true;
+            }
+            updateSelectionUI();
+        }
+
+        function getSelectedIds() {
+            return labelCheckboxes
+                .filter(function(cb) { return cb.checked; })
+                .map(function(cb) { return cb.value; });
+        }
+
+        selectFirstBtn.addEventListener('click', function() { selectRange('first'); });
+        selectLastBtn.addEventListener('click', function() { selectRange('last'); });
+        selectAllBtn.addEventListener('click', function() {
+            labelCheckboxes.forEach(function(cb) { cb.checked = true; });
+            updateSelectionUI();
+        });
+        clearSelectionBtn.addEventListener('click', function() {
+            labelCheckboxes.forEach(function(cb) { cb.checked = false; });
+            updateSelectionUI();
+        });
+        labelCheckboxes.forEach(function(cb) {
+            cb.addEventListener('change', updateSelectionUI);
+        });
+        labelCards.forEach(function(card) {
+            card.addEventListener('click', function(event) {
+                if (event.target.classList.contains('label-select')) return;
+                const checkbox = card.querySelector('.label-select');
+                checkbox.checked = !checkbox.checked;
+                updateSelectionUI();
+            });
+        });
+        pdfPrintBtn.addEventListener('click', function() {
+            if (getSelectedIds().length === 0) {
+                showToast('Nothing Selected', 'Select at least one barcode label.', 'warning');
+                return;
+            }
+            window.print();
+        });
+
+        thermalPrintBtn.addEventListener('click', function() {
+            const selectedIds = getSelectedIds();
+            if (selectedIds.length === 0) {
+                showToast('Nothing Selected', 'Select at least one barcode label.', 'warning');
+                return;
+            }
+
+            showLoading(this, true);
+
+            const url = 'barcode-print.php?stock_item_id=' + encodeURIComponent(stockItemId)
+                + '&selected_ids=' + encodeURIComponent(selectedIds.join(','))
+                + '&print_thermal=1';
+
+            fetch(url, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                showLoading(thermalPrintBtn, false);
+                if (data.success) {
+                    showToast('✅ Print Success', data.message || 'Barcodes sent to thermal printer.', 'success');
+                } else {
+                    if (data.message && data.message.toLowerCase().includes('not running')) {
+                        showToast('❌ Printer Offline', data.message + ' Please start the GK Thermal Print Service.', 'error');
+                        updatePrinterStatus(false, 'Offline');
+                    } else {
+                        showToast('❌ Print Failed', data.message || 'Unable to print barcodes.', 'error');
+                    }
+                }
+            })
+            .catch(function(error) {
+                showLoading(thermalPrintBtn, false);
+                showToast('❌ Connection Error', 'Unable to connect to printer service. Please ensure the service is running.', 'error');
+                updatePrinterStatus(false, 'Connection Error');
+            });
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                thermalPrintBtn.click();
+            }
+        });
+
+        selectRange('first');
+        checkPrinterStatus();
+        setInterval(checkPrinterStatus, 30000);
+    })();
+    </script>
 </body>
 </html>

@@ -193,4 +193,25 @@ class PosBillingController
         if (!$offer) { return array('success' => false, 'message' => 'Invalid or expired offer code.'); }
         return array('success' => true, 'offer' => $offer);
     }
+
+    // ============================================
+    // NEW: GET BILL FOR PRINT - Added for direct reprint
+    // ============================================
+    public function getBillForPrint(array $input)
+    {
+        $branchId = $this->branchId($input);
+        $this->ensureBranch($branchId);
+        $billId = (int)($input['bill_id'] ?? 0);
+        
+        if ($billId <= 0) {
+            return array('success' => false, 'message' => 'Bill ID required.');
+        }
+        
+        $result = $this->model->getBillForPrint($this->businessId, $branchId, $billId);
+        if (!$result) {
+            return array('success' => false, 'message' => 'Bill not found.');
+        }
+        
+        return array('success' => true, 'bill' => $result['bill'], 'items' => $result['items'], 'payments' => $result['payments']);
+    }
 }

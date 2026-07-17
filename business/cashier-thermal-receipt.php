@@ -1,18 +1,267 @@
 <?php
-/** GK Footwear POS - Cashier Thermal Receipt */
-declare(strict_types=1);
+/**
+ * GK Footwear - Thermal Receipt Generator for Pending Collections
+ * Generates JSON data for the .NET thermal print service
+ * 
+ * FIX: Correctly calculates paid amount without doubling
+ */
+
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/permissions.php';
-if (function_exists('require_business_login')) { require_business_login(); }
-if (function_exists('require_page_access')) { require_page_access($conn, 'cashier-collect-payment.php'); }
-function tr_e($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-function tr_business_id(): int { return function_exists('current_business_id') ? (int)current_business_id() : (int)($_SESSION['business_id'] ?? 0); }
-function tr_rows(mysqli $conn,string $sql,string $types='',array $params=[]): array { $stmt=mysqli_prepare($conn,$sql); if(!$stmt)throw new RuntimeException(mysqli_error($conn)); if($types){$refs=[$stmt,$types]; foreach($params as $k=>$v)$refs[]=&$params[$k]; call_user_func_array('mysqli_stmt_bind_param',$refs);} mysqli_stmt_execute($stmt); $res=mysqli_stmt_get_result($stmt); $rows=[]; if($res){while($r=mysqli_fetch_assoc($res))$rows[]=$r;} mysqli_stmt_close($stmt); return $rows; }
-function tr_one(mysqli $conn,string $sql,string $types='',array $params=[]): array { $r=tr_rows($conn,$sql,$types,$params); return $r[0]??[]; }
-function tr_code128_svg(string $text, int $height=46): string { $patterns=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112']; $codes=[104]; $checksum=104; $pos=1; foreach(str_split($text) as $ch){$ord=ord($ch); if($ord<32||$ord>126)$ord=32; $val=$ord-32; $codes[]=$val; $checksum+=$val*$pos++;} $codes[]=$checksum%103; $codes[]=106; $module=1.35; $quiet=8; $x=$quiet; $bars=''; foreach($codes as $code){$pattern=$patterns[$code]??$patterns[0]; $black=true; for($i=0;$i<strlen($pattern);$i++){ $w=((int)$pattern[$i])*$module; if($black)$bars.='<rect x="'.number_format($x,2,'.','').'" y="0" width="'.number_format($w,2,'.','').'" height="'.$height.'" fill="#000"/>'; $x+=$w; $black=!$black; }} $width=$x+$quiet; return '<svg class="barcode" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '.number_format($width,2,'.','').' '.$height.'" preserveAspectRatio="none">'.$bars.'</svg>'; }
-try { $businessId=tr_business_id(); $billId=(int)($_GET['bill_id']??0); if($businessId<=0||$billId<=0)throw new RuntimeException('Invalid receipt request.'); $bill=tr_one($conn,"SELECT b.*, bb.barcode_value bill_barcode, bs.business_name, bs.mobile shop_mobile, bs.address shop_address, br.branch_name, br.floor_name FROM bills b LEFT JOIN bill_barcodes bb ON bb.bill_id=b.bill_id AND bb.business_id=b.business_id LEFT JOIN businesses bs ON bs.business_id=b.business_id LEFT JOIN branches br ON br.branch_id=b.branch_id AND br.business_id=b.business_id WHERE b.business_id=? AND b.bill_id=? LIMIT 1",'ii',[$businessId,$billId]); if(!$bill)throw new RuntimeException('Bill not found.'); $items=tr_rows($conn,"SELECT bi.*, COALESCE(br.brand_name,'') brand_name, COALESCE(sii.color,'') color FROM bill_items bi LEFT JOIN brands br ON br.brand_id=bi.brand_id AND br.business_id=bi.business_id LEFT JOIN stock_inward_items sii ON sii.stock_item_id=bi.stock_item_id AND sii.business_id=bi.business_id WHERE bi.business_id=? AND bi.bill_id=? ORDER BY bi.bill_item_id ASC",'ii',[$businessId,$billId]); $payments=tr_rows($conn,"SELECT bp.*, pm.payment_method_name, pm.method_type FROM bill_payments bp LEFT JOIN payment_methods pm ON pm.payment_method_id=bp.payment_method_id AND pm.business_id=bp.business_id WHERE bp.business_id=? AND bp.bill_id=? AND bp.payment_status='received' ORDER BY bp.payment_id ASC",'ii',[$businessId,$billId]); } catch(Throwable $e){ echo '<h3>'.tr_e($e->getMessage()).'</h3>'; exit; }
-$barcode=(string)($bill['bill_barcode'] ?: $bill['bill_no']); $auto=(int)($_GET['auto_print']??0)===1;
-?>
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt <?= tr_e($bill['bill_no']) ?></title><style>*{box-sizing:border-box}body{margin:0;background:#f3f4f6;font-family:Arial,sans-serif;color:#000}.receipt{width:80mm;max-width:80mm;margin:0 auto;background:#fff;padding:4mm 3mm;font-size:11px;line-height:1.25}.center{text-align:center}.shop{font-size:16px;font-weight:900;text-transform:uppercase}.muted{font-size:10px}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;gap:8px}.right{text-align:right}.item{margin-bottom:5px}.item-name{font-weight:800}.small{font-size:10px}.total{font-size:14px;font-weight:900}.barcode{width:100%;height:16mm;display:block}.barcode-no{text-align:center;font-size:11px;font-weight:900;letter-spacing:.08em;margin-top:2px}.status{font-size:13px;font-weight:900}.toolbar{position:sticky;top:0;background:#fff;padding:8px;text-align:center;border-bottom:1px solid #ddd}.btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:8px 14px;font-weight:800}@media print{body{background:#fff}.toolbar{display:none}.receipt{width:80mm;margin:0;padding:3mm}@page{size:80mm auto;margin:0}}</style></head><body><div class="toolbar"><button class="btn" onclick="window.print()">Print Receipt</button> <button class="btn" onclick="window.close()">Close</button></div><div class="receipt"><div class="center"><div class="shop"><?= tr_e($bill['business_name'] ?: 'GK FOOTWEAR') ?></div><div class="muted"><?= tr_e($bill['shop_address'] ?? '') ?></div><div class="muted"><?= tr_e($bill['shop_mobile'] ?? '') ?></div><div class="line"></div><b>FINAL THERMAL INVOICE</b></div><div class="line"></div><div class="row"><span>Bill No</span><b><?= tr_e($bill['bill_no']) ?></b></div><div class="row"><span>Date</span><span><?= tr_e($bill['bill_date'].' '.$bill['bill_time']) ?></span></div><div class="row"><span>Customer</span><span><?= tr_e($bill['customer_name'] ?: 'Walk-in Customer') ?></span></div><div class="row"><span>Branch</span><span><?= tr_e(($bill['branch_name'] ?? '').(($bill['floor_name']??'')?' / '.$bill['floor_name']:'')) ?></span></div><div class="line"></div><?php foreach($items as $it): ?><div class="item"><div class="item-name"><?= tr_e($it['article_no']) ?> <?= tr_e($it['article_name']) ?></div><div class="small"><?= tr_e($it['brand_name']) ?> | Size: <?= tr_e($it['size']) ?> | Color: <?= tr_e($it['color'] ?: '-') ?></div><div class="row"><span><?= number_format((float)$it['qty'],2) ?> x ₹<?= number_format((float)$it['selling_rate'],2) ?></span><b>₹<?= number_format((float)$it['amount'],2) ?></b></div></div><?php endforeach; ?><div class="line"></div><div class="row"><span>MRP Total</span><span>₹<?= number_format((float)$bill['mrp_total'],2) ?></span></div><div class="row"><span>Savings</span><span>₹<?= number_format((float)$bill['today_savings_amount'],2) ?></span></div><div class="row total"><span>Total Amount</span><span>₹<?= number_format((float)$bill['net_amount'],2) ?></span></div><div class="row"><span>Paid Amount</span><b>₹<?= number_format((float)$bill['paid_amount'],2) ?></b></div><div class="row"><span>Balance</span><b>₹<?= number_format((float)$bill['balance_amount'],2) ?></b></div><div class="line"></div><div><b>Payment Method</b></div><?php foreach($payments as $p): ?><div class="row"><span><?= tr_e($p['payment_method_name'] ?: $p['method_type']) ?></span><span>₹<?= number_format((float)$p['paid_amount'],2) ?></span></div><?php endforeach; ?><div class="center status">Paid Status: <?= strtoupper(tr_e($bill['payment_status'])) ?></div><div class="line"></div><div class="center"><div>Bill Barcode</div><?= tr_code128_svg($barcode) ?><div class="barcode-no"><?= tr_e($barcode) ?></div><div class="small">Use this barcode/bill number for Return & Exchange</div></div><div class="line"></div><div class="center small">Thank you! Visit again.</div></div><?php if($auto): ?><script>window.addEventListener('load',function(){setTimeout(function(){window.print()},450)});</script><?php endif; ?></body></html>
+
+require_business_login();
+
+$businessId = function_exists('current_business_id') ? (int)current_business_id() : (int)($_SESSION['business_id'] ?? 0);
+$branchId = function_exists('current_branch_id') ? (int)current_branch_id() : (int)($_SESSION['branch_id'] ?? 0);
+$cashierName = $_SESSION['name'] ?? $_SESSION['username'] ?? 'Cashier';
+
+// Get parameters
+$billId = isset($_GET['bill_id']) ? max(0, (int)$_GET['bill_id']) : 0;
+$autoPrint = isset($_GET['auto_print']) && $_GET['auto_print'] == '1';
+$collectionAmount = isset($_GET['collection_amount']) ? (float)$_GET['collection_amount'] : 0;
+$baseDueAmount = isset($_GET['base_due_amount']) ? (float)$_GET['base_due_amount'] : 0;
+$collectionTotal = isset($_GET['collection_total_amount']) ? (float)$_GET['collection_total_amount'] : 0;
+$paymentMethod = isset($_GET['payment_method_name']) ? trim($_GET['payment_method_name']) : '';
+$collectedBy = isset($_GET['collected_by']) ? trim($_GET['collected_by']) : $cashierName;
+
+// GST Parameters
+$gstEnabled = isset($_GET['gst_enabled']) && (int)$_GET['gst_enabled'] === 1;
+$gstMode = isset($_GET['gst_mode']) ? trim($_GET['gst_mode']) : 'intra';
+$gstRate = isset($_GET['gst_rate']) ? (float)$_GET['gst_rate'] : 0;
+$taxableAmount = isset($_GET['taxable_amount']) ? (float)$_GET['taxable_amount'] : 0;
+$cgstAmount = isset($_GET['cgst_amount']) ? (float)$_GET['cgst_amount'] : 0;
+$sgstAmount = isset($_GET['sgst_amount']) ? (float)$_GET['sgst_amount'] : 0;
+$igstAmount = isset($_GET['igst_amount']) ? (float)$_GET['igst_amount'] : 0;
+$taxAmount = isset($_GET['tax_amount']) ? (float)$_GET['tax_amount'] : 0;
+
+if ($businessId <= 0) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Business session missing. Please login again.']);
+    exit;
+}
+
+if ($billId <= 0) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid request. Bill ID required.']);
+    exit;
+}
+
+// Fetch bill details
+$billQuery = "
+    SELECT 
+        b.*,
+        br.branch_name,
+        br.floor_name,
+        bs.business_name,
+        bs.address AS business_address,
+        bs.gstin,
+        u.name AS sales_user_name,
+        u.user_id AS sales_user_id
+    FROM bills b
+    LEFT JOIN branches br ON br.branch_id = b.branch_id AND br.business_id = b.business_id
+    LEFT JOIN businesses bs ON bs.business_id = b.business_id
+    LEFT JOIN users u ON u.user_id = b.created_by
+    WHERE b.bill_id = ? 
+      AND b.business_id = ?
+      AND b.bill_status = 'active'
+    LIMIT 1
+";
+
+$stmt = mysqli_prepare($conn, $billQuery);
+if (!$stmt) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
+    exit;
+}
+
+mysqli_stmt_bind_param($stmt, 'ii', $billId, $businessId);
+mysqli_stmt_execute($stmt);
+$billResult = mysqli_stmt_get_result($stmt);
+$bill = mysqli_fetch_assoc($billResult);
+mysqli_stmt_close($stmt);
+
+if (!$bill) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'message' => 'Bill not found.']);
+    exit;
+}
+
+// Fetch bill items
+$itemsQuery = "
+    SELECT 
+        bi.*,
+        si.article_no,
+        si.article_name,
+        si.size,
+        si.color,
+        b.brand_name,
+        c.category_name
+    FROM bill_items bi
+    LEFT JOIN stock_inward_items si ON si.stock_item_id = bi.stock_item_id
+    LEFT JOIN brands b ON b.brand_id = si.brand_id
+    LEFT JOIN categories c ON c.category_id = si.category_id
+    WHERE bi.bill_id = ? 
+      AND bi.business_id = ?
+    ORDER BY bi.bill_item_id ASC
+";
+
+$stmt = mysqli_prepare($conn, $itemsQuery);
+if (!$stmt) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
+    exit;
+}
+
+mysqli_stmt_bind_param($stmt, 'ii', $billId, $businessId);
+mysqli_stmt_execute($stmt);
+$itemsResult = mysqli_stmt_get_result($stmt);
+$items = array();
+while ($row = mysqli_fetch_assoc($itemsResult)) {
+    $items[] = $row;
+}
+mysqli_stmt_close($stmt);
+
+// Build print data for .NET service
+$branchDisplay = ($bill['branch_name'] ?? '') . ($bill['floor_name'] ? ' ' . $bill['floor_name'] : '');
+
+// Get the net amount from the bill
+$netAmount = (float)($bill['net_amount'] ?? 0);
+
+// ============================================
+// FIX: CORRECT PAID AMOUNT CALCULATION
+// ============================================
+// Get the existing paid amount from the bill
+$existingPaid = (float)($bill['paid_amount'] ?? 0);
+
+// The collection amount is the amount being paid NOW
+$newCollectionAmount = $collectionAmount;
+
+// If collection amount is provided via GET, use it
+if ($newCollectionAmount > 0) {
+    // The total paid should be: existing paid + this collection
+    $totalPaid = $existingPaid + $newCollectionAmount;
+} else {
+    // If no collection amount, use the existing paid
+    $totalPaid = $existingPaid;
+}
+
+// IMPORTANT: The total paid should NEVER exceed the grand total
+$totalPaid = min($totalPaid, $netAmount);
+
+// Calculate balance
+$balanceAmount = max(0, $netAmount - $totalPaid);
+
+// Determine payment status
+if ($balanceAmount <= 0.009) {
+    $paymentStatus = 'PAID';
+} elseif ($totalPaid > 0) {
+    $paymentStatus = 'PARTIAL';
+} else {
+    $paymentStatus = 'PENDING';
+}
+
+// Determine the sales user name
+$salesUserName = $bill['sales_user_name'] ?? 'N/A';
+
+// Build the print data
+$printData = array(
+    "PrintType" => "COLLECTION",
+    "ShopName" => $bill['business_name'] ?? 'GK FOOTWEAR',
+    "Address" => $bill['business_address'] ?? 'Gandhi Nagar, Krishnagiri.',
+    "InvoiceTitle" => $bill['invoice_title'] ?? 'Bill of Supply',
+    "BillNo" => $bill['bill_no'] ?? '',
+    "OrderNo" => $bill['order_no'] ?? 'ORD-' . ($bill['bill_no'] ?? ''),
+    "Date" => date('d-m-Y', strtotime($bill['bill_date'] ?? date('Y-m-d'))),
+    "Time" => $bill['bill_time'] ?? date('h.i.s A'),
+    "Customer" => $bill['customer_name'] ?? 'Walk-in Customer',
+    "Branch" => $branchDisplay ?: 'N/A',
+    "Salesman" => $salesUserName,
+    "CollectedBy" => $collectedBy ?: 'N/A',
+    "PaymentStatus" => $paymentStatus,
+    "PaymentMethod" => $paymentMethod ?: 'Cash',
+    "GrandTotal" => $netAmount,
+    "Paid" => $totalPaid,  // FIXED: Correct total paid amount
+    "Balance" => $balanceAmount,  // FIXED: Correct balance
+    "Barcode" => $bill['bill_barcode'] ?? $bill['barcode_value'] ?? '',
+    "Items" => array()
+);
+
+// Add GST details if enabled
+if ($gstEnabled) {
+    $printData['GSTEnabled'] = true;
+    $printData['GSTMode'] = $gstMode;
+    $printData['GSTRate'] = $gstRate;
+    $printData['TaxableAmount'] = $taxableAmount;
+    $printData['CGSTAmount'] = $cgstAmount;
+    $printData['SGSTAmount'] = $sgstAmount;
+    $printData['IGSTAmount'] = $igstAmount;
+    $printData['TaxAmount'] = $taxAmount;
+}
+
+// Add items
+foreach ($items as $item) {
+    $description = '';
+    if (!empty($item['article_no'])) {
+        $description .= $item['article_no'];
+    }
+    if (!empty($item['brand_name'])) {
+        $description .= ($description ? ' / ' : '') . $item['brand_name'];
+    }
+    if (!empty($item['size'])) {
+        $description .= ($description ? ' / ' : '') . 'Size ' . $item['size'];
+    }
+
+    $printData['Items'][] = array(
+        "Name" => $item['article_name'] ?? $item['name'] ?? 'Item',
+        "Description" => $description,
+        "Qty" => (float)($item['qty'] ?? 1),
+        "Rate" => (float)($item['selling_rate'] ?? 0)
+    );
+}
+
+// Log the print data for debugging
+error_log("Thermal Print Data: " . json_encode($printData));
+
+// If auto-print is requested, send directly to .NET service
+if ($autoPrint) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "http://127.0.0.1:17900/");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($printData));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: application/json"));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+    $printResponse = curl_exec($ch);
+    $printError = curl_error($ch);
+    $printHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    // Prepare response
+    $response = array(
+        'success' => empty($printError) && $printHttpCode == 200,
+        'message' => empty($printError) ? 'Print sent successfully' : 'Print error: ' . $printError,
+        'data' => $printData,
+        'print_response' => $printResponse,
+        'http_code' => $printHttpCode
+    );
+
+    if (!empty($printError)) {
+        error_log("Thermal Print Error: " . $printError);
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+    exit;
+}
+
+// Otherwise, display the print data as JSON
+header('Content-Type: application/json');
+echo json_encode(array(
+    'success' => true,
+    'message' => 'Print data ready',
+    'data' => $printData
+));
+exit;
