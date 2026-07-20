@@ -14,6 +14,17 @@ $businessId = (int) current_business_id();
 if ($businessId <= 0) {
     die('Business session missing. Please login again.');
 }
+
+$stockListCsrfToken = '';
+
+if (function_exists('csrf_token')) {
+    $stockListCsrfToken = (string) csrf_token();
+} elseif (!empty($_SESSION['csrf_token'])) {
+    $stockListCsrfToken = (string) $_SESSION['csrf_token'];
+} else {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $stockListCsrfToken = (string) $_SESSION['csrf_token'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" class="light">
@@ -220,6 +231,19 @@ if ($businessId <= 0) {
         align-items: center;
         gap: 4px;
         line-height: 1;
+    }
+
+    .mp-delete-btn {
+        border-color: #fecaca;
+        color: #b91c1c;
+        background: #fff;
+    }
+
+    .mp-delete-btn:hover,
+    .mp-delete-btn:focus {
+        border-color: #dc2626;
+        color: #fff;
+        background: #dc2626;
     }
 
     .mp-mobile-card {
@@ -436,7 +460,7 @@ if ($businessId <= 0) {
                 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
                     <div>
                         <h1>Stock List</h1>
-                        <p>View firm-wise footwear stock, article, colour, barcode, available quantity, and batch details.</p>
+                        <p>View current firm-wise footwear stock, article, colour, available quantity, pricing, and batch details.</p>
                     </div>
 
                     <div class="d-flex flex-wrap gap-2">
@@ -624,6 +648,8 @@ if ($businessId <= 0) {
     'use strict';
 
     const apiUrl = 'api/stock-list-api.php';
+    const deleteEndpoint = apiUrl;
+    const csrfToken = <?= json_encode($stockListCsrfToken, JSON_UNESCAPED_SLASHES) ?>;
     const tableBody = document.getElementById('stockTableBody');
     const mobileCards = document.getElementById('stockMobileCards');
     const filterForm = document.getElementById('stockFilterForm');
@@ -672,7 +698,22 @@ if ($businessId <= 0) {
                 'Accept': 'application/json',
                 'Cache-Control': 'no-cache'
             }
-        }).then(function (response) { return response.json(); });
+        }).then(async function (response) {
+            const raw = await response.text();
+            let data;
+
+            try {
+                data = JSON.parse(raw);
+            } catch (error) {
+                throw new Error('Invalid stock API response: ' + raw.substring(0, 180));
+            }
+
+            if (!response.ok) {
+                throw new Error(data.message || ('Stock API HTTP ' + response.status));
+            }
+
+            return data;
+        });
     }
 
     function setLiveStatus(state, message) {
@@ -714,7 +755,92 @@ if ($businessId <= 0) {
         select.value = current;
     }
 
+    function firstValue(source, keys, fallback) {
+        source = source || {};
+        for (let i = 0; i < keys.length; i++) {
+            const value = source[keys[i]];
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+                return value;
+            }
+        }
+        return fallback;
+    }
+
+    function numericValue(source, keys, fallback) {
+        const value = firstValue(source, keys, fallback ?? 0);
+        const number = parseFloat(value);
+        return Number.isFinite(number) ? number : parseFloat(fallback || 0);
+    }
+
+    function normalizeStockItem(raw) {
+        raw = raw || {};
+
+        const normalized = Object.assign({}, raw, {
+            stock_item_id: parseInt(firstValue(raw, ['stock_item_id','item_id','id'], 0), 10) || 0,
+            business_id: parseInt(firstValue(raw, ['business_id'], 0), 10) || 0,
+            branch_id: parseInt(firstValue(raw, ['branch_id','shop_id'], 0), 10) || 0,
+            batch_id: parseInt(firstValue(raw, ['batch_id','stock_batch_id'], 0), 10) || 0,
+            supplier_id: parseInt(firstValue(raw, ['supplier_id','vendor_id'], 0), 10) || 0,
+            category_id: parseInt(firstValue(raw, ['category_id'], 0), 10) || 0,
+            brand_id: parseInt(firstValue(raw, ['brand_id'], 0), 10) || 0,
+
+            article_no: String(firstValue(raw, ['article_no','product_code','article_code','sku','item_code'], '-')),
+            article_name: String(firstValue(raw, ['article_name','product_name','item_name','name'], '-')),
+            category_name: String(firstValue(raw, ['category_name','category'], '-')),
+            brand_name: String(firstValue(raw, ['brand_name','brand'], '-')),
+            size: String(firstValue(raw, ['size','product_size','variant_size'], '-')),
+            color: String(firstValue(raw, ['color','colour','product_color','product_colour'], '-')),
+
+            branch_name: String(firstValue(raw, ['branch_name','shop_name','firm_name'], '-')),
+            floor_name: String(firstValue(raw, ['floor_name','branch_floor','shop_code'], '')),
+            batch_no: String(firstValue(raw, ['batch_no','inward_no','stock_inward_no'], '-')),
+            inward_no: String(firstValue(raw, ['inward_no','batch_no','stock_inward_no'], '-')),
+            inward_date: String(firstValue(raw, ['inward_date','stock_date','created_date','created_at'], '-')),
+            invoice_no: String(firstValue(raw, ['invoice_no','supplier_invoice_no','bill_no'], '-')),
+            supplier_name: String(firstValue(raw, ['supplier_name','vendor_name'], '-')),
+            supplier_mobile: String(firstValue(raw, ['supplier_mobile','supplier_phone','vendor_mobile'], '-')),
+
+            qty: numericValue(raw, ['qty','inward_qty','quantity','stock_qty','total_qty'], 0),
+            available_qty: numericValue(raw, ['available_qty','current_stock','available_stock','balance_qty','stock_balance','closing_stock'], 0),
+            purchase_rate: numericValue(raw, ['purchase_rate','purchase_price','cost_price','unit_cost'], 0),
+            mrp_rate: numericValue(raw, ['mrp_rate','mrp','maximum_retail_price'], 0),
+            discount_value: numericValue(raw, ['discount_value','discount','product_discount'], 0),
+            selling_rate: numericValue(raw, ['selling_rate','selling_price','sale_price','unit_price','price'], 0),
+
+            item_status: String(firstValue(raw, ['item_status','stock_status','status'], 'active')).toLowerCase(),
+            barcode_values: String(firstValue(raw, ['barcode_values','barcodes','barcode_value','barcode','qr_code'], '')),
+            barcode_value: String(firstValue(raw, ['barcode_value','barcode','qr_code','latest_qr_code'], ''))
+        });
+
+        if (normalized.selling_rate <= 0 && normalized.mrp_rate > 0) {
+            normalized.selling_rate = Math.max(0, normalized.mrp_rate - normalized.discount_value);
+        }
+
+        if (normalized.available_qty <= 0 && normalized.item_status === 'active' && normalized.qty > 0) {
+            const soldQty = numericValue(raw, ['sold_qty','total_sold_qty','out_qty'], 0);
+            normalized.available_qty = Math.max(0, normalized.qty - soldQty);
+        }
+
+        if (normalized.available_qty <= 0 && normalized.item_status === 'active') {
+            normalized.item_status = 'out_of_stock';
+        }
+
+        return normalized;
+    }
+
+    function normalizeStats(stats) {
+        stats = stats || {};
+        return {
+            total_items: numericValue(stats, ['total_items','total_records','item_count','products_count'], 0),
+            total_qty: numericValue(stats, ['total_qty','available_qty','current_stock','total_available_qty'], 0),
+            total_stock_value: numericValue(stats, ['total_stock_value','stock_value','selling_stock_value','inventory_value'], 0),
+            low_stock_items: numericValue(stats, ['low_stock_items','low_stock_count'], 0),
+            out_stock_items: numericValue(stats, ['out_stock_items','out_of_stock_items','out_stock_count'], 0)
+        };
+    }
+
     function renderStats(stats) {
+        stats = normalizeStats(stats);
         document.getElementById('totalItems').textContent = parseInt(stats.total_items || 0, 10);
         document.getElementById('totalQty').textContent = parseFloat(stats.total_qty || 0).toFixed(2);
         document.getElementById('stockValue').textContent = money.format(parseFloat(stats.total_stock_value || 0));
@@ -860,6 +986,7 @@ if ($businessId <= 0) {
     }
 
     function renderStock(items) {
+        items = Array.isArray(items) ? items.map(normalizeStockItem) : [];
         if (!items.length) {
             tableBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">No stock found.</td></tr>';
             mobileCards.innerHTML = '<div class="mp-mobile-card text-center text-muted">No stock found.</div>';
@@ -870,6 +997,11 @@ if ($businessId <= 0) {
             const branchName = item.branch_name || item.floor_name || '-';
             const articleName = item.article_name || '-';
             const itemId = parseInt(item.stock_item_id || 0, 10);
+            const availableQty = parseFloat(item.available_qty || 0);
+            const canDelete = availableQty <= 0;
+            const deleteButton = canDelete
+                ? '<button type="button" class="btn btn-sm mp-action-btn mp-delete-btn js-delete" data-id="' + itemId + '" data-label="' + escapeHtml(item.article_no || item.article_name || 'Product') + '"><i data-lucide="trash-2" style="width:12px;height:12px;"></i> Delete</button>'
+                : '';
             return `
                 <tr>
                     <td>
@@ -899,7 +1031,10 @@ if ($businessId <= 0) {
                     <td class="barcode-cell">${qrContent(stockBarcodeValue(item))}</td>
                     <td>${statusBadge(item.item_status)}</td>
                     <td>
-                        <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn js-view" data-id="${itemId}">View</button>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn js-view" data-id="${itemId}">View</button>
+                            ${deleteButton}
+                        </div>
                     </td>
                 </tr>
             `;
@@ -907,6 +1042,11 @@ if ($businessId <= 0) {
 
         mobileCards.innerHTML = items.map(function (item) {
             const itemId = parseInt(item.stock_item_id || 0, 10);
+            const availableQty = parseFloat(item.available_qty || 0);
+            const canDelete = availableQty <= 0;
+            const deleteButton = canDelete
+                ? '<button type="button" class="btn btn-sm mp-action-btn mp-delete-btn js-delete" data-id="' + itemId + '" data-label="' + escapeHtml(item.article_no || item.article_name || 'Product') + '"><i data-lucide="trash-2" style="width:12px;height:12px;"></i> Delete</button>'
+                : '';
             return `
                 <div class="mp-mobile-card">
                     <div class="d-flex gap-2">
@@ -929,12 +1069,48 @@ if ($businessId <= 0) {
                             <div class="fw-bold mt-2">MRP: ${money.format(parseFloat(item.mrp_rate || 0))} · Selling: ${money.format(parseFloat(item.selling_rate || 0))}</div>
                             <div class="d-flex flex-wrap gap-2 mt-2">
                                 <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn js-view" data-id="${itemId}">View</button>
+                                ${deleteButton}
                             </div>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
+    }
+
+    function extractStockItems(data) {
+        const candidates = [
+            data && data.stock && data.stock.items,
+            data && data.stock && data.stock.rows,
+            data && data.items,
+            data && data.rows,
+            data && data.data && data.data.items,
+            data && data.data && data.data.rows
+        ];
+
+        for (let i = 0; i < candidates.length; i++) {
+            if (Array.isArray(candidates[i])) {
+                return candidates[i].map(normalizeStockItem);
+            }
+        }
+
+        return [];
+    }
+
+    function extractPagination(data) {
+        return (data && data.stock && data.stock.pagination)
+            || (data && data.pagination)
+            || (data && data.data && data.data.pagination)
+            || {};
+    }
+
+    function extractStats(data) {
+        return normalizeStats(
+            (data && data.stats)
+            || (data && data.stock && data.stock.stats)
+            || (data && data.data && data.data.stats)
+            || {}
+        );
     }
 
     function filterParams() {
@@ -984,9 +1160,9 @@ if ($businessId <= 0) {
                 return;
             }
 
-            renderStats(data.stats || {});
-            renderStock((data.stock && data.stock.items) ? data.stock.items : []);
-            setPagination((data.stock && data.stock.pagination) ? data.stock.pagination : {});
+            renderStats(extractStats(data));
+            renderStock(extractStockItems(data));
+            setPagination(extractPagination(data));
             setLiveStatus('ok', 'Live: ' + liveTimeText());
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
@@ -1014,9 +1190,9 @@ if ($businessId <= 0) {
             fillSelect('category_id', data.categories || [], 'category_id', function (row) { return row.category_name || '-'; }, 'All Categories');
             fillSelect('brand_id', data.brands || [], 'brand_id', function (row) { return row.brand_name || '-'; }, 'All Brands');
 
-            renderStats(data.stats || {});
-            renderStock((data.stock && data.stock.items) ? data.stock.items : []);
-            setPagination((data.stock && data.stock.pagination) ? data.stock.pagination : {});
+            renderStats(extractStats(data));
+            renderStock(extractStockItems(data));
+            setPagination(extractPagination(data));
             setLiveStatus('ok', 'Live: ' + liveTimeText());
             startAutoRefresh();
             if (window.lucide) window.lucide.createIcons();
@@ -1120,7 +1296,7 @@ if ($businessId <= 0) {
                 return;
             }
 
-            const item = data.item || {};
+            const item = normalizeStockItem(data.item || {});
             const barcode = stockBarcodeValue(item);
             detailBody.innerHTML = `
                 <div class="stock-detail-grid">
@@ -1142,6 +1318,69 @@ if ($businessId <= 0) {
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
             detailBody.innerHTML = '<div class="text-danger">Unable to fetch stock details.</div>';
+        }
+    }
+
+    async function deleteOutOfStockProduct(button) {
+        const stockItemId = parseInt(button.dataset.id || '0', 10);
+        const productLabel = String(button.dataset.label || 'this product');
+
+        if (stockItemId <= 0) {
+            showMessage('error', 'Invalid product selected.');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            'Permanently delete "' + productLabel + '"?\n\n'
+            + 'This option is available only because its stock is zero. '
+            + 'This action cannot be undone.'
+        );
+
+        if (!confirmed) return;
+
+        const originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Deleting';
+
+        try {
+            const formData = new FormData();
+            formData.append('action', 'delete_out_of_stock');
+            formData.append('stock_item_id', String(stockItemId));
+
+            // Support all CSRF field names used across the existing project.
+            formData.append('csrf_token', csrfToken);
+            formData.append('_token', csrfToken);
+            formData.append('csrf', csrfToken);
+
+            const response = await fetch(deleteEndpoint, {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.message || 'Unable to delete the product.');
+            }
+
+            showMessage('success', data.message || 'Out-of-stock product permanently deleted.');
+
+            if (detailModalEl && detailModalEl.classList.contains('show')) {
+                const modal = getDetailModal();
+                if (modal) modal.hide();
+            }
+
+            await loadStock(false);
+        } catch (error) {
+            showMessage('error', error.message || 'Unable to delete the product.');
+            button.disabled = false;
+            button.innerHTML = originalHtml;
+            if (window.lucide) window.lucide.createIcons();
         }
     }
 
@@ -1196,6 +1435,12 @@ if ($businessId <= 0) {
         const viewBtn = event.target.closest('.js-view');
         if (viewBtn) {
             viewStock(viewBtn.dataset.id);
+            return;
+        }
+
+        const deleteBtn = event.target.closest('.js-delete');
+        if (deleteBtn) {
+            deleteOutOfStockProduct(deleteBtn);
         }
     });
 
