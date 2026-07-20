@@ -262,8 +262,12 @@ if ($businessId <= 0) {
         .line-title { font-weight: 950; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
         .line-sub { color: var(--pos-muted); font-size: 9.5px; margin-top: 1px; }
         .line-edit-input { width: 70px; border: 1px solid var(--pos-border); border-radius: 10px; padding: 5px; font-weight: 850; font-size: 11px; }
+        .js-line-qty { text-align:center; }
+        .js-line-qty::-webkit-outer-spin-button,
+        .js-line-qty::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+        .js-line-qty[type=number] { appearance:textfield; -moz-appearance:textfield; }
+
         .row-action { border: 0; width: 30px; height: 30px; border-radius: 10px; display: inline-grid; place-items: center; margin: 1px; }
-        .row-action.edit { background: #dbeafe; color: #1d4ed8; }
         .row-action.remove { background: #fee2e2; color: #b91c1c; }
         .empty-bill { height: 100%; min-height: 280px; display: grid; place-items: center; color: var(--pos-muted); text-align: center; padding: 30px; }
         .empty-icon { width: 72px; height: 72px; border-radius: 24px; margin: 0 auto 12px; background: linear-gradient(135deg, #e0f2fe, #ede9fe); color: #2563eb; display: grid; place-items: center; }
@@ -1244,7 +1248,7 @@ if ($businessId <= 0) {
                             <span class="pos-step-badge">Step 2</span>
                             <h2 class="pos-panel-title">Bill Items</h2>
                         </div>
-                        <div class="pos-panel-sub">Review, edit quantity/price and remove items before saving.</div>
+                        <div class="pos-panel-sub">Review quantity, selling price and remove items before saving.</div>
                     </div>
 
                     <div class="bill-header-customer-card" id="billHeaderCustomerCard">
@@ -1300,7 +1304,6 @@ if ($businessId <= 0) {
                                 <th>Discount</th>
                                 <th>Selling</th>
                                 <th>Amount</th>
-                                <th>Edit</th>
                                 <th>Remove</th>
                             </tr>
                             </thead>
@@ -1355,7 +1358,7 @@ if ($businessId <= 0) {
                         <div class="summary-line"><span>Round Off</span><strong id="sumRoundOff">₹0.00</strong></div>
                     </div>
 
-                    <div class="summary-card gst-card js-gst-system-visible" id="gstCard">
+                    <!-- <div class="summary-card gst-card js-gst-system-visible" id="gstCard">
                         <div class="gst-head">
                             <div>
                                 <div class="pos-label">GST Options</div>
@@ -1380,7 +1383,7 @@ if ($businessId <= 0) {
                         <div class="summary-line gst-detail"><span>SGST</span><strong id="sumSgst">₹0.00</strong></div>
                         <div class="summary-line gst-detail"><span>IGST</span><strong id="sumIgst">₹0.00</strong></div>
                         <div class="summary-line net gst-detail"><span>Total GST</span><strong id="sumGst">₹0.00</strong></div>
-                    </div>
+                    </div> -->
 
                     <div class="grand-total-box">
                         <div class="grand-label">Grand Total</div>
@@ -1657,7 +1660,16 @@ if ($businessId <= 0) {
     // ============================================
     // THERMAL PRINT SERVICE
     // ============================================
-    const THERMAL_PRINT_URL = 'http://127.0.0.1:17900/';
+    const THERMAL_PRINT_ENDPOINTS = [
+        'http://127.0.0.1:17900/',
+        'http://127.0.0.1:17900/print',
+        'http://localhost:17900/',
+        'http://localhost:17900/print'
+    ];
+    const THERMAL_PRINT_TIMEOUT_MS = 3500;
+    let thermalPrintInProgress = false;
+    let lastThermalPrintedBillId = 0;
+    let lastThermalPrintedAt = 0;
 
     function buildThermalPrintData(bill, items, customerName, branchName) {
         bill = bill || {};
@@ -1679,6 +1691,8 @@ if ($businessId <= 0) {
             Branch: bill.branch_name || branchName || getSelectedBranchName(),
             Salesman: salesUserName || 'Sales User',
             PaymentStatus: String(bill.payment_status || 'PENDING').toUpperCase(),
+            Copies: 1,
+            PrintCopies: 1,
             GrandTotal: grandTotal,
             Paid: paid,
             Balance: balance,
@@ -1694,30 +1708,186 @@ if ($businessId <= 0) {
         };
     }
 
-    async function printViaThermalService(printData) {
+    async function thermalServiceReachable(endpoint) {
         try {
-            const response = await fetch(THERMAL_PRINT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(printData)
-            });
-            const text = await response.text();
-            if (text && text.indexOf('PRINT SUCCESS') !== -1) {
-                showMessage('success', 'Bill sent to thermal printer.');
+            const url = new URL(endpoint, window.location.href);
+            const probeUrl = url.origin + '/?health_check=' + Date.now();
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(function () {
+                controller.abort();
+            }, 1800);
+
+            try {
+                /*
+                 * no-cors is intentional. A local .NET service may not expose
+                 * CORS headers even though it is running and printing correctly.
+                 * A resolved opaque response confirms that the service/port is
+                 * reachable; a rejected request means the service is unavailable.
+                 */
+                await fetch(probeUrl, {
+                    method: 'GET',
+                    mode: 'no-cors',
+                    cache: 'no-store',
+                    credentials: 'omit',
+                    signal: controller.signal
+                });
                 return true;
+            } finally {
+                window.clearTimeout(timeoutId);
             }
-            showMessage('warning', 'Printer response: ' + (text || 'unknown.'));
-            return false;
         } catch (error) {
-            showMessage('warning', 'Unable to reach the thermal print app on this device. Make sure it is running (http://127.0.0.1:17900/).');
             return false;
+        }
+    }
+
+    function thermalEndpointOrder() {
+        const saved = String(localStorage.getItem('gk_thermal_print_endpoint') || '').trim();
+        const endpoints = [];
+
+        if (saved && THERMAL_PRINT_ENDPOINTS.includes(saved)) {
+            endpoints.push(saved);
+        }
+
+        THERMAL_PRINT_ENDPOINTS.forEach(function (endpoint) {
+            if (!endpoints.includes(endpoint)) {
+                endpoints.push(endpoint);
+            }
+        });
+
+        return endpoints;
+    }
+
+    function thermalResponseSuccess(response, responseText, json) {
+        const normalized = String(responseText || '').trim().toUpperCase();
+        const status = String((json && json.status) || '').trim().toLowerCase();
+        const printResponse = String(
+            (json && json.print_response) ||
+            (json && json.data && json.data.print_response) ||
+            ''
+        ).trim().toUpperCase();
+
+        return response.ok && (
+            normalized.includes('PRINT_SUCCESS') ||
+            normalized.includes('PRINT SUCCESS') ||
+            normalized.includes('PRINTED') ||
+            normalized === 'OK' ||
+            printResponse.includes('PRINT_SUCCESS') ||
+            printResponse.includes('PRINT SUCCESS') ||
+            printResponse.includes('PRINTED') ||
+            printResponse === 'OK' ||
+            (json && json.success === true) ||
+            status === 'success' ||
+            (json && json.printed === true)
+        );
+    }
+
+    async function printViaThermalService(printData, options) {
+        options = options || {};
+        printData = printData || {};
+
+        const billId = parseInt(options.billId || printData.BillId || 0, 10);
+        const forceReprint = options.forceReprint === true;
+        const now = Date.now();
+
+        if (thermalPrintInProgress) {
+            return false;
+        }
+
+        if (!forceReprint && billId > 0 && billId === lastThermalPrintedBillId && (now - lastThermalPrintedAt) < 15000) {
+            return true;
+        }
+
+        thermalPrintInProgress = true;
+        printData.Copies = 1;
+        printData.PrintCopies = 1;
+        printData.JobId = 'GK-BILL-' + (billId || 'NEW') + '-' + now;
+
+        try {
+            let lastError = null;
+            const endpoints = thermalEndpointOrder();
+
+            for (const endpoint of endpoints) {
+                const controller = new AbortController();
+                const timeoutId = window.setTimeout(function () {
+                    controller.abort();
+                }, THERMAL_PRINT_TIMEOUT_MS);
+
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        mode: 'cors',
+                        cache: 'no-store',
+                        credentials: 'omit',
+                        signal: controller.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json, text/plain, */*',
+                            'X-Print-Job-Id': printData.JobId
+                        },
+                        body: JSON.stringify(printData)
+                    });
+
+                    const responseText = await response.text();
+                    let json = null;
+                    try {
+                        json = responseText ? JSON.parse(responseText) : null;
+                    } catch (ignored) {}
+
+                    if (thermalResponseSuccess(response, responseText, json)) {
+                        if (billId > 0) {
+                            lastThermalPrintedBillId = billId;
+                            lastThermalPrintedAt = Date.now();
+                        }
+                        localStorage.setItem('gk_thermal_print_endpoint', endpoint);
+                        showMessage('success', 'One bill sent to thermal printer.');
+                        return true;
+                    }
+
+                    lastError = new Error('Printer service returned: ' + (responseText || ('HTTP ' + response.status)));
+                } catch (endpointError) {
+                    lastError = endpointError;
+
+                    /*
+                     * The POST can print successfully but still reject in the
+                     * browser when the .NET app omits CORS response headers.
+                     * Confirm that the local service is reachable before showing
+                     * a false "app is not running" warning. Also stop here so the
+                     * same bill is not posted to additional endpoints.
+                     */
+                    const reachable = await thermalServiceReachable(endpoint);
+                    if (reachable) {
+                        if (billId > 0) {
+                            lastThermalPrintedBillId = billId;
+                            lastThermalPrintedAt = Date.now();
+                        }
+                        localStorage.setItem('gk_thermal_print_endpoint', endpoint);
+                        showMessage('success', 'Print request sent to the thermal printer.');
+                        return true;
+                    }
+                } finally {
+                    window.clearTimeout(timeoutId);
+                }
+            }
+
+            console.error('Thermal print service connection failed:', lastError);
+            showMessage(
+                'warning',
+                'Bill saved successfully, but the local thermal print app is not running or is blocked. '
+                + 'Start the print app and confirm port 17900 is open.'
+            );
+            return false;
+        } finally {
+            thermalPrintInProgress = false;
         }
     }
 
     async function reprintBillThermal(bill, items, customerName, branchName) {
         const printData = buildThermalPrintData(bill, items, customerName, branchName);
         printData.PrintType = 'CREATE_BILL';
-        return printViaThermalService(printData);
+        return printViaThermalService(printData, {
+            billId: parseInt((bill && bill.bill_id) || 0, 10),
+            forceReprint: true
+        });
     }
 
     function escapeHtml(value) {
@@ -2293,12 +2463,11 @@ if ($businessId <= 0) {
                 <td>${escapeHtml(item.brand_name || '-')}</td>
                 <td>${escapeHtml(item.color || '-')}</td>
                 <td><b>${escapeHtml(item.size)}</b></td>
-                <td><input type="number" class="line-edit-input js-line-qty" data-index="${index}" min="1" step="1" value="${toNumber(item.qty)}"></td>
+                <td><input type="number" class="line-edit-input js-line-qty" data-index="${index}" min="1" step="1" inputmode="numeric" value="${Math.max(1, Math.floor(toNumber(item.qty)))}"></td>
                 <td>${money.format(toNumber(item.mrp_rate))}</td>
-                <td>${money.format(itemDiscount)}</td>
-                <td><input type="number" class="line-edit-input js-line-selling" data-index="${index}" step="0.01" value="${toNumber(item.selling_rate).toFixed(2)}"></td>
-                <td><b>${money.format(amount)}</b></td>
-                <td><button type="button" class="row-action edit js-edit-line" data-index="${index}"><i data-lucide="pencil"></i></button></td>
+                <td class="js-line-discount-view" data-index="${index}">${money.format(itemDiscount)}</td>
+                <td><input type="number" class="line-edit-input js-line-selling" data-index="${index}" min="0" max="${toNumber(item.mrp_rate).toFixed(2)}" step="0.01" value="${toNumber(item.selling_rate).toFixed(2)}"></td>
+                <td class="js-line-amount-view" data-index="${index}"><b>${money.format(amount)}</b></td>
                 <td><button type="button" class="row-action remove js-remove-line" data-index="${index}"><i data-lucide="trash-2"></i></button></td>
             </tr>`;
         }).join('');
@@ -3011,7 +3180,12 @@ if ($businessId <= 0) {
         };
     }
 
+    let billSaveInProgress = false;
+
     async function saveBill(printAfter) {
+        if (billSaveInProgress) {
+            return false;
+        }
         if (!state.items.length) {
             showMessage('warning', 'Add at least one item.');
             return;
@@ -3021,6 +3195,7 @@ if ($businessId <= 0) {
         const itemsSnapshot = payload.items.slice();
         const customerNameSnapshot = payload.customer_display_name || 'Walk-in Customer';
         const branchNameSnapshot = getSelectedBranchName();
+        billSaveInProgress = true;
         try {
             const data = await apiPost('save_bill', payload);
             if (!data.success) {
@@ -3039,14 +3214,21 @@ if ($businessId <= 0) {
             if (printAfter) {
                 const printData = buildThermalPrintData(state.lastSavedBill, itemsSnapshot, customerNameSnapshot, branchNameSnapshot);
                 printData.PrintType = 'CREATE_BILL';
-                await printViaThermalService(printData);
+                await printViaThermalService(printData, {
+                    billId: state.lastSavedBillId,
+                    forceReprint: false
+                });
             }
             resetBill(true);
             await refreshNumbersAndHolds();
             await loadBillHistory();
         } catch (error) {
             showMessage('error', 'Unable to save bill.');
+            return false;
+        } finally {
+            billSaveInProgress = false;
         }
+        return true;
     }
 
     async function saveWorkflow(type) {
@@ -3428,84 +3610,224 @@ if ($businessId <= 0) {
             renderBillItems();
         }
 
-        const editNode = event.target.closest('.js-edit-line');
-        if (editNode) {
-            const item = state.items[parseInt(editNode.dataset.index, 10)];
-            if (item) {
-                selectProduct(item, [item]);
-                el.qtyInput.value = item.qty;
-                el.sellingInput.value = toNumber(item.selling_rate).toFixed(2);
-                el.discountType.value = item.discount_type || 'none';
-                el.discountValue.value = toNumber(item.discount_value || 0).toFixed(2);
-                el.itemRemarks.value = item.item_remarks || '';
-                state.items.splice(parseInt(editNode.dataset.index, 10), 1);
-                renderBillItems();
-            }
-        }
-
-        const resumeNode = event.target.closest('.js-resume-workflow, .js-resume-hold');
-        if (resumeNode) {
-            resumeWorkflow(parseInt(resumeNode.dataset.id, 10));
-        }
-
-        const cancelHoldNode = event.target.closest('.js-cancel-history, .js-cancel-hold');
-        if (cancelHoldNode) {
-            const source = cancelHoldNode.dataset.source || 'workflow';
-            if (source === 'bill') { cancelSavedBill(parseInt(cancelHoldNode.dataset.id, 10)); }
-            else { cancelWorkflow(parseInt(cancelHoldNode.dataset.id, 10)); }
-        }
-
-        // ============================================
-        // DIRECT REPRINT EVENT HANDLER
-        // ============================================
-        const reprintDirectNode = event.target.closest('.js-reprint-bill-direct');
-        if (reprintDirectNode) {
-            event.preventDefault();
-            reprintHistoryBillDirect(parseInt(reprintDirectNode.dataset.id, 10));
-        }
-
-        const openBillNode = event.target.closest('.js-open-bill');
-        if (openBillNode) {
-            openBillPrint(parseInt(openBillNode.dataset.id, 10), false);
-        }
-
-        // REMOVED: Return button handler - no longer needed
-    });
-
-    document.addEventListener('input', function (event) {
-        const qtyLine = event.target.closest('.js-line-qty');
-        if (qtyLine) {
-            const i = parseInt(qtyLine.dataset.index, 10);
-            const item = state.items[i];
-            const qty = Math.max(1, toNumber(qtyLine.value));
-            if (item && qty <= toNumber(item.available_qty)) {
-                item.qty = qty;
-            } else if (item) {
-                qtyLine.value = item.qty;
-                showMessage('warning', 'Quantity cannot exceed available stock.');
-            }
-            renderSummary();
-        }
-
-        const sellingLine = event.target.closest('.js-line-selling');
-        if (sellingLine) {
-            const i = parseInt(sellingLine.dataset.index, 10);
-            const item = state.items[i];
-            const selling = toNumber(sellingLine.value);
-            if (item && selling >= 0 && selling <= toNumber(item.mrp_rate)) {
-                item.selling_rate = selling;
-            }
-            renderSummary();
-        }
 
         if (event.target.matches('#billDiscountType, #billDiscountValue, #loyaltyRedeem, #gstRate, #singlePaidAmount, .split-amount, .split-ref, #customerNotes, #salesNotes, #singlePaymentRef')) {
             renderSummary();
             persistCurrentBill();
         }
 
-        if (qtyLine || sellingLine) {
+        if (qtyLine) {
             persistCurrentBill();
         }
+    });
+
+
+    function updateBillLineQuantity(qtyInput, finalize) {
+        const index = parseInt(qtyInput.dataset.index || '-1', 10);
+        const item = state.items[index];
+
+        if (!item) {
+            return;
+        }
+
+        const rawValue = String(qtyInput.value ?? '').trim();
+
+        /*
+         * Allow blank or zero temporarily while typing. This lets the cashier
+         * replace the existing quantity naturally without it jumping to 1.
+         */
+        if (!finalize && (rawValue === '' || rawValue === '0')) {
+            item.qty = 0;
+            item.quantity = 0;
+            item.amount = 0;
+            item.line_amount = 0;
+            item.net_amount = 0;
+
+            const temporaryAmountCell = document.querySelector(
+                '.js-line-amount-view[data-index="' + index + '"]'
+            );
+
+            if (temporaryAmountCell) {
+                temporaryAmountCell.innerHTML = '<b>' + money.format(0) + '</b>';
+            }
+
+            renderSummary();
+            return;
+        }
+
+        let qty = Math.floor(toNumber(rawValue));
+
+        if (qty < 1) {
+            qty = 1;
+            qtyInput.value = '1';
+        }
+
+        const availableStock = Math.floor(toNumber(
+            item.available_qty ??
+            item.available_stock ??
+            item.stock_qty ??
+            item.current_stock ??
+            0
+        ));
+
+        if (availableStock > 0 && qty > availableStock) {
+            qty = availableStock;
+            qtyInput.value = String(availableStock);
+            showMessage(
+                'warning',
+                'Only ' + availableStock + ' quantity is available for this product.'
+            );
+        }
+
+        const selling = Math.max(0, toNumber(item.selling_rate));
+        const lineAmount = roundMoney(qty * selling);
+
+        item.qty = qty;
+        item.quantity = qty;
+        item.amount = lineAmount;
+        item.line_amount = lineAmount;
+        item.net_amount = lineAmount;
+
+        const amountCell = document.querySelector(
+            '.js-line-amount-view[data-index="' + index + '"]'
+        );
+
+        if (amountCell) {
+            amountCell.innerHTML = '<b>' + money.format(lineAmount) + '</b>';
+        }
+
+        renderSummary();
+
+        if (finalize) {
+            persistCurrentBill();
+        }
+    }
+
+    function updateBillLineSelling(sellingInput) {
+        const index = parseInt(sellingInput.dataset.index || '-1', 10);
+        const item = state.items[index];
+
+        if (!item) {
+            return;
+        }
+
+        const mrp = Math.max(0, toNumber(item.mrp_rate));
+        const qty = Math.max(1, toNumber(item.qty));
+        let selling = toNumber(sellingInput.value);
+
+        if (selling < 0) {
+            selling = 0;
+            sellingInput.value = '0.00';
+        }
+
+        if (selling > mrp) {
+            selling = mrp;
+            sellingInput.value = mrp.toFixed(2);
+        }
+
+        selling = roundMoney(selling);
+
+        const unitDiscount = Math.max(0, roundMoney(mrp - selling));
+        const lineAmount = roundMoney(qty * selling);
+
+        item.selling_rate = selling;
+        item.discount_type = unitDiscount > 0 ? 'amount' : 'none';
+        item.discount_value = unitDiscount;
+        item.product_discount_type = item.discount_type;
+        item.product_discount_value = unitDiscount;
+        item.discount_amount = unitDiscount;
+
+        const discountCell = document.querySelector(
+            '.js-line-discount-view[data-index="' + index + '"]'
+        );
+        const amountCell = document.querySelector(
+            '.js-line-amount-view[data-index="' + index + '"]'
+        );
+
+        if (discountCell) {
+            discountCell.textContent = money.format(unitDiscount);
+        }
+
+        if (amountCell) {
+            amountCell.innerHTML = '<b>' + money.format(lineAmount) + '</b>';
+        }
+
+        /*
+         * Refresh only the totals. Do not rebuild the Bill Items table here,
+         * because rebuilding it while typing would remove focus from the
+         * Selling input.
+         */
+        renderSummary();
+        persistCurrentBill();
+    }
+
+    document.addEventListener('focusin', function (event) {
+        const qtyInput = event.target.closest('.js-line-qty');
+        if (!qtyInput) {
+            return;
+        }
+
+        requestAnimationFrame(function () {
+            qtyInput.select();
+        });
+    });
+
+    document.addEventListener('click', function (event) {
+        const qtyInput = event.target.closest('.js-line-qty');
+        if (!qtyInput) {
+            return;
+        }
+
+        if (!qtyInput.dataset.qtyClicked) {
+            qtyInput.dataset.qtyClicked = '1';
+            qtyInput.select();
+        }
+    });
+
+    document.addEventListener('input', function (event) {
+        const qtyInput = event.target.closest('.js-line-qty');
+        if (!qtyInput) {
+            return;
+        }
+
+        updateBillLineQuantity(qtyInput, false);
+    });
+
+    document.addEventListener('change', function (event) {
+        const qtyInput = event.target.closest('.js-line-qty');
+        if (!qtyInput) {
+            return;
+        }
+
+        updateBillLineQuantity(qtyInput, true);
+    });
+
+    document.addEventListener('focusout', function (event) {
+        const qtyInput = event.target.closest('.js-line-qty');
+        if (!qtyInput) {
+            return;
+        }
+
+        delete qtyInput.dataset.qtyClicked;
+        updateBillLineQuantity(qtyInput, true);
+    });
+
+    document.addEventListener('input', function (event) {
+        const sellingInput = event.target.closest('.js-line-selling');
+        if (!sellingInput) {
+            return;
+        }
+
+        updateBillLineSelling(sellingInput);
+    });
+
+    document.addEventListener('change', function (event) {
+        const sellingInput = event.target.closest('.js-line-selling');
+        if (!sellingInput) {
+            return;
+        }
+
+        updateBillLineSelling(sellingInput);
     });
 
     document.addEventListener('change', function (event) {

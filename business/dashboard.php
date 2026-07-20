@@ -176,51 +176,7 @@ if ($businessId <= 0) {
     .bottom-grid {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
-    .quick-grid {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 10px;
-    }
-    .quick-link {
-        text-decoration: none;
-        color: inherit;
-        border: 1px solid var(--border-soft, #dbe4f0);
-        background: #f8fafc;
-        border-radius: 16px;
-        padding: 11px 10px;
-        min-height: 82px;
-        display: flex;
-        flex-direction: column;
-        gap: 7px;
-        transition: .18s ease;
-    }
-    .quick-link:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(15,23,42,.08);
-        border-color: #bfdbfe;
-        color: #0f172a;
-    }
-    .quick-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: 12px;
-        display: grid;
-        place-items: center;
-        background: #e0f2fe;
-        color: #0369a1;
-    }
-    .quick-icon svg { width: 16px; height: 16px; }
-    .quick-title {
-        font-size: 11.5px;
-        font-weight: 850;
-        line-height: 1.2;
-    }
-    .quick-sub {
-        color: var(--text-muted, #64748b);
-        font-size: 10px;
-        line-height: 1.2;
-    }
-    .line-chart-wrap {
+                                .line-chart-wrap {
         min-height: 265px;
         display: grid;
         align-items: end;
@@ -475,8 +431,7 @@ if ($businessId <= 0) {
     }
     @media (max-width: 1450px) {
         .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    }
+            }
     @media (max-width: 1199px) {
         .chart-grid, .bottom-grid { grid-template-columns: 1fr; }
     }
@@ -486,8 +441,7 @@ if ($businessId <= 0) {
         .dash-hero h1 { font-size: 19px; }
         .dash-toolbar { justify-content: flex-start; }
         .kpi-grid { grid-template-columns: 1fr; }
-        .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .kpi-card { min-height: 88px; }
+                .kpi-card { min-height: 88px; }
         .bar-row { grid-template-columns: 86px 1fr; }
         .bar-value { grid-column: 2; }
     }
@@ -496,8 +450,7 @@ if ($businessId <= 0) {
     html, body { max-width: 100%; overflow-x: hidden; }
     #main, .erp-dashboard { min-width: 0; max-width: 100%; }
     .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); }
-    .quick-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
-    .dash-card .table-responsive { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .dash-card .table-responsive { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .dash-table { min-width: 520px; }
     .dash-toolbar .dash-control { max-width: 100%; }
     .kpi-card { min-width: 0; }
@@ -516,17 +469,14 @@ if ($businessId <= 0) {
         .kpi-card { padding: 10px; min-height: 86px; gap: 8px; }
         .kpi-icon { width: 34px; height: 34px; border-radius: 12px; }
         .kpi-value { font-size: 15px; white-space: normal; }
-        .quick-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-        .quick-link { min-height: 74px; padding: 9px; }
-        .dash-card-head { align-items: flex-start; flex-direction: column; }
+                        .dash-card-head { align-items: flex-start; flex-direction: column; }
         .line-chart-wrap { min-height: 210px; overflow-x: auto; }
         .svg-chart { min-width: 640px; }
         .bar-row { grid-template-columns: minmax(78px, 100px) minmax(0, 1fr); }
         .bar-value { grid-column: 2; text-align: right; }
     }
     @media (max-width: 430px) {
-        .kpi-grid, .quick-grid { grid-template-columns: 1fr; }
-        .dash-table { min-width: 480px; }
+        .kpi-grid,         .dash-table { min-width: 480px; }
     }
 
     </style>
@@ -575,15 +525,6 @@ if ($businessId <= 0) {
                 <div class="dash-card kpi-card"><div class="kpi-icon" style="background:#ecfeff;color:#0e7490;"><i data-lucide="boxes"></i></div><div><div class="kpi-label">Available stock</div><div class="kpi-value" id="kpiStockQty">0</div><div class="kpi-meta" id="kpiLowStock">0 low stock</div></div></div>
                 <div class="dash-card kpi-card"><div class="kpi-icon" style="background:#fef3c7;color:#b45309;"><i data-lucide="users"></i></div><div><div class="kpi-label">Customer due</div><div class="kpi-value" id="kpiCustomerDue">₹0.00</div><div class="kpi-meta" id="kpiCustomerCount">0 customers</div></div></div>
                 <div class="dash-card kpi-card"><div class="kpi-icon" style="background:#ede9fe;color:#6d28d9;"><i data-lucide="truck"></i></div><div><div class="kpi-label">Supplier due</div><div class="kpi-value" id="kpiSupplierDue">₹0.00</div><div class="kpi-meta" id="kpiSupplierCount">0 suppliers</div></div></div>
-            </div>
-
-            <div class="dash-card mb-3">
-                <div class="dash-card-head">
-                    <div><h2 class="dash-card-title">Quick Actions</h2><p class="dash-card-sub">Fast access to frequently used ERP screens.</p></div>
-                </div>
-                <div class="dash-card-body">
-                    <div class="quick-grid" id="quickActions"></div>
-                </div>
             </div>
 
             <div class="dash-grid chart-grid mb-3">
@@ -793,23 +734,6 @@ if ($businessId <= 0) {
         setText('kpiSupplierDue', money(k.supplier_outstanding));
         setText('kpiSupplierCount', parseInt(k.outstanding_supplier_count || 0, 10) + ' suppliers');
     }
-    function renderQuickActions(rows) {
-        rows = rows && rows.length ? rows : [];
-        const target = document.getElementById('quickActions');
-        if (!target) { return; }
-        if (!rows.length) {
-            target.innerHTML = '<div class="empty-box" style="grid-column:1/-1;">No quick actions configured for this role.</div>';
-            return;
-        }
-        target.innerHTML = rows.map(function (r) {
-            return '<a class="quick-link" href="' + esc(r.url || '#') + '">' +
-                '<span class="quick-icon"><i data-lucide="' + esc(r.icon || 'circle-dot') + '"></i></span>' +
-                '<span class="quick-title">' + esc(r.title || 'Open') + '</span>' +
-                '<span class="quick-sub">' + esc(r.subtitle || 'Open module') + '</span>' +
-            '</a>';
-        }).join('');
-    }
-
     function renderLineChart(rows) {
         const target = document.getElementById('salesTrendChart');
         if (!rows || !rows.length) {
@@ -961,7 +885,6 @@ if ($businessId <= 0) {
     function renderAll(data) {
         fillBranches(data.branches || []);
         renderKpis(data.kpis || {});
-        renderQuickActions(data.quick_actions || []);
         renderLineChart(data.sales_trend || []);
         renderBars('paymentMixChart', data.payment_mix || [], 'payment_method_name', 'paid_amount', 'No payment collections.', 'money');
         renderStockOverview(data.stock_overview || {});

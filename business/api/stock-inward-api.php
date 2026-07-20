@@ -662,19 +662,31 @@ function si_insert_items(mysqli $conn, int $businessId, int $branchId, int $batc
         mysqli_stmt_close($stmt);
 
         if ((int)$item['barcode_required'] === 1) {
-            $barcodeCount = max(1, (int)round((float)$item['qty']));
+            /*
+             * One barcode is generated for the complete purchased product line.
+             * Example: Qty 10 => one shared barcode such as STK-000148.
+             * The next inward product line receives the next sequence number.
+             */
+            $barcode = si_generate_barcode($conn, $businessId, $branchId);
+            $stmt = mysqli_prepare($conn, "
+                INSERT INTO stock_barcodes
+                (business_id, branch_id, batch_id, stock_item_id, barcode_value, barcode_status)
+                VALUES (?, ?, ?, ?, ?, 'active')
+            ");
 
-            for ($i = 0; $i < $barcodeCount; $i++) {
-                $barcode = si_generate_barcode($conn, $businessId, $branchId);
-                $stmt = mysqli_prepare($conn, "
-                    INSERT INTO stock_barcodes
-                    (business_id, branch_id, batch_id, stock_item_id, barcode_value, barcode_status)
-                    VALUES (?, ?, ?, ?, ?, 'active')
-                ");
-                mysqli_stmt_bind_param($stmt, 'iiiis', $businessId, $branchId, $batchId, $stockItemId, $barcode);
-                mysqli_stmt_execute($stmt);
-                mysqli_stmt_close($stmt);
+            if (!$stmt) {
+                throw new RuntimeException('Barcode insert prepare failed: ' . mysqli_error($conn));
             }
+
+            mysqli_stmt_bind_param($stmt, 'iiiis', $businessId, $branchId, $batchId, $stockItemId, $barcode);
+
+            if (!mysqli_stmt_execute($stmt)) {
+                $error = mysqli_stmt_error($stmt);
+                mysqli_stmt_close($stmt);
+                throw new RuntimeException('Barcode insert failed: ' . $error);
+            }
+
+            mysqli_stmt_close($stmt);
         }
     }
 }
@@ -869,6 +881,359 @@ function si_save_stock_inward(mysqli $conn, int $businessId, array $allowedBranc
             'batch_no' => $batchNo,
             'supplier_id' => $supplierId,
             'purchase_total_value' => $purchaseTotal,
+        ];
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        throw $e;
+    }
+}
+
+
+function si_get_stock_item_for_edit(
+    mysqli $conn,
+    int $businessId,
+    int $stockItemId,
+    array $allowedBranchIds
+): array {
+    if ($stockItemId <= 0) {
+        throw new RuntimeException('Invalid stock item.');
+    }
+
+    if (!$allowedBranchIds) {
+        throw new RuntimeException('No branch access.');
+    }
+
+    $branchSql = implode(',', array_map('intval', $allowedBranchIds));
+
+    $item = si_one($conn, "
+        SELECT
+            sii.*,
+            br.brand_name,
+            c.category_name,
+            sib.batch_no,
+            sib.batch_status,
+            MIN(CASE WHEN sb.barcode_status <> 'deleted' THEN sb.barcode_value ELSE NULL END) AS barcode_value,
+            GREATEST(0, sii.qty - sii.available_qty) AS used_qty
+        FROM stock_inward_items sii
+        INNER JOIN stock_inward_batches sib
+            ON sib.business_id = sii.business_id
+           AND sib.batch_id = sii.batch_id
+        LEFT JOIN brands br
+            ON br.business_id = sii.business_id
+           AND br.brand_id = sii.brand_id
+        LEFT JOIN categories c
+            ON c.business_id = sii.business_id
+           AND c.category_id = sii.category_id
+        LEFT JOIN stock_barcodes sb
+            ON sb.business_id = sii.business_id
+           AND sb.stock_item_id = sii.stock_item_id
+        WHERE sii.business_id = ?
+          AND sii.stock_item_id = ?
+          AND sii.branch_id IN ($branchSql)
+        GROUP BY sii.stock_item_id
+        LIMIT 1
+    ", 'ii', [$businessId, $stockItemId]);
+
+    if (!$item) {
+        throw new RuntimeException('Stock item not found.');
+    }
+
+    return $item;
+}
+
+function si_recalculate_batch_totals(
+    mysqli $conn,
+    int $businessId,
+    int $batchId
+): array {
+    $totals = si_one($conn, "
+        SELECT
+            COALESCE(SUM(qty), 0) AS total_qty,
+            COALESCE(SUM(qty * purchase_rate), 0) AS purchase_total,
+            COALESCE(SUM(qty * mrp_rate), 0) AS mrp_total,
+            COALESCE(SUM(qty * selling_rate), 0) AS selling_total
+        FROM stock_inward_items
+        WHERE business_id = ?
+          AND batch_id = ?
+          AND item_status <> 'deleted'
+    ", 'ii', [$businessId, $batchId]);
+
+    $totalQty = round((float)($totals['total_qty'] ?? 0), 2);
+    $purchaseTotal = round((float)($totals['purchase_total'] ?? 0), 2);
+    $mrpTotal = round((float)($totals['mrp_total'] ?? 0), 2);
+    $sellingTotal = round((float)($totals['selling_total'] ?? 0), 2);
+
+    $stmt = mysqli_prepare($conn, "
+        UPDATE stock_inward_batches
+        SET total_qty = ?,
+            purchase_total_value = ?,
+            mrp_total_value = ?,
+            selling_total_value = ?,
+            updated_at = NOW()
+        WHERE business_id = ?
+          AND batch_id = ?
+    ");
+
+    mysqli_stmt_bind_param(
+        $stmt,
+        'ddddii',
+        $totalQty,
+        $purchaseTotal,
+        $mrpTotal,
+        $sellingTotal,
+        $businessId,
+        $batchId
+    );
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return [
+        'total_qty' => $totalQty,
+        'purchase_total' => $purchaseTotal,
+        'mrp_total' => $mrpTotal,
+        'selling_total' => $sellingTotal,
+    ];
+}
+
+function si_update_stock_item(
+    mysqli $conn,
+    int $businessId,
+    array $allowedBranchIds,
+    array $permissions
+): array {
+    if (!$permissions['can_edit']) {
+        throw new RuntimeException('You do not have permission to edit stock.');
+    }
+
+    $stockItemId = (int)($_POST['stock_item_id'] ?? 0);
+    $articleName = trim((string)($_POST['article_name'] ?? ''));
+    $brandId = (int)($_POST['brand_id'] ?? 0);
+    $size = trim((string)($_POST['size'] ?? ''));
+    $color = trim((string)($_POST['color'] ?? ''));
+    $purchaseRate = round((float)($_POST['purchase_rate'] ?? 0), 2);
+    $mrpRate = round((float)($_POST['mrp_rate'] ?? 0), 2);
+    $sellingRate = round((float)($_POST['selling_rate'] ?? 0), 2);
+    $newQty = round((float)($_POST['qty'] ?? 0), 2);
+
+    if ($stockItemId <= 0) {
+        throw new RuntimeException('Invalid stock item.');
+    }
+
+    if ($articleName === '') {
+        throw new RuntimeException('Product name is required.');
+    }
+
+    if ($brandId <= 0) {
+        throw new RuntimeException('Brand is required.');
+    }
+
+    if ($size === '') {
+        throw new RuntimeException('Size is required.');
+    }
+
+    if ($purchaseRate <= 0 || $mrpRate <= 0 || $sellingRate <= 0 || $newQty <= 0) {
+        throw new RuntimeException('Quantity and all prices must be greater than zero.');
+    }
+
+    if ($mrpRate < $purchaseRate) {
+        throw new RuntimeException('MRP must be greater than or equal to purchase price.');
+    }
+
+    if ($sellingRate > $mrpRate) {
+        throw new RuntimeException('Selling price cannot be greater than MRP.');
+    }
+
+    si_check_master($conn, $businessId, 'brands', 'brand_id', $brandId, 'brand');
+
+    mysqli_begin_transaction($conn);
+
+    try {
+        $item = si_one($conn, "
+            SELECT
+                sii.*,
+                sib.batch_status,
+                sib.supplier_id,
+                sib.purchase_total_value AS old_batch_purchase_total,
+                sib.batch_no
+            FROM stock_inward_items sii
+            INNER JOIN stock_inward_batches sib
+                ON sib.business_id = sii.business_id
+               AND sib.batch_id = sii.batch_id
+            WHERE sii.business_id = ?
+              AND sii.stock_item_id = ?
+            LIMIT 1
+            FOR UPDATE
+        ", 'ii', [$businessId, $stockItemId]);
+
+        if (!$item) {
+            throw new RuntimeException('Stock item not found.');
+        }
+
+        si_require_branch_access($allowedBranchIds, (int)$item['branch_id']);
+
+        if ((string)$item['batch_status'] !== 'active') {
+            throw new RuntimeException('Only stock items in an active batch can be edited.');
+        }
+
+        if ((string)($item['item_status'] ?? 'active') !== 'active') {
+            throw new RuntimeException('Only active stock items can be edited.');
+        }
+
+        $oldQty = round((float)$item['qty'], 2);
+        $oldAvailable = round((float)$item['available_qty'], 2);
+        $usedQty = round(max(0, $oldQty - $oldAvailable), 2);
+
+        if ($newQty < $usedQty) {
+            throw new RuntimeException(
+                'Quantity cannot be less than the already sold/used quantity of '
+                . number_format($usedQty, 2, '.', '') . '.'
+            );
+        }
+
+        $newAvailable = round($newQty - $usedQty, 2);
+        $qtyDelta = round($newQty - $oldQty, 2);
+
+        $linePurchaseValue = round($newQty * $purchaseRate, 2);
+        $lineMrpValue = round($newQty * $mrpRate, 2);
+        $lineSellingValue = round($newQty * $sellingRate, 2);
+        $discountAmount = round(max(0, $mrpRate - $sellingRate), 2);
+
+        $stmt = mysqli_prepare($conn, "
+            UPDATE stock_inward_items
+            SET article_name = ?,
+                brand_id = ?,
+                size = ?,
+                color = ?,
+                qty = ?,
+                available_qty = ?,
+                purchase_rate = ?,
+                mrp_rate = ?,
+                product_discount_type = 'amount',
+                product_discount_value = ?,
+                discount_amount = ?,
+                selling_rate = ?,
+                line_purchase_value = ?,
+                line_mrp_value = ?,
+                line_selling_value = ?,
+                updated_at = NOW()
+            WHERE business_id = ?
+              AND stock_item_id = ?
+        ");
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            'sissddddddddddii',
+            $articleName,
+            $brandId,
+            $size,
+            $color,
+            $newQty,
+            $newAvailable,
+            $purchaseRate,
+            $mrpRate,
+            $discountAmount,
+            $discountAmount,
+            $sellingRate,
+            $linePurchaseValue,
+            $lineMrpValue,
+            $lineSellingValue,
+            $businessId,
+            $stockItemId
+        );
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+
+        // Record only the quantity difference. Existing barcode rows remain untouched.
+        if (abs($qtyDelta) > 0.000001) {
+            $qtyIn = $qtyDelta > 0 ? $qtyDelta : 0.0;
+            $qtyOut = $qtyDelta < 0 ? abs($qtyDelta) : 0.0;
+            $remarks = $qtyDelta > 0
+                ? 'Existing stock quantity increased through Edit Stock'
+                : 'Existing stock quantity reduced through Edit Stock';
+            $createdBy = si_user_id();
+
+            $stmt = mysqli_prepare($conn, "
+                INSERT INTO stock_movements
+                (business_id, branch_id, stock_item_id, movement_type, reference_type,
+                 reference_id, entry_date, qty_in, qty_out, balance_qty, remarks, created_by)
+                VALUES (?, ?, ?, 'adjustment', 'stock_item_edit', ?, CURDATE(), ?, ?, ?, ?, ?)
+            ");
+
+            $referenceId = (int)$item['batch_id'];
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                'iiiidddsi',
+                $businessId,
+                $item['branch_id'],
+                $stockItemId,
+                $referenceId,
+                $qtyIn,
+                $qtyOut,
+                $newAvailable,
+                $remarks,
+                $createdBy
+            );
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        $batchTotals = si_recalculate_batch_totals(
+            $conn,
+            $businessId,
+            (int)$item['batch_id']
+        );
+
+        $oldBatchPurchaseTotal = round((float)$item['old_batch_purchase_total'], 2);
+        $newBatchPurchaseTotal = round((float)$batchTotals['purchase_total'], 2);
+        $supplierDifference = round($newBatchPurchaseTotal - $oldBatchPurchaseTotal, 2);
+        $supplierId = (int)($item['supplier_id'] ?? 0);
+
+        if ($supplierId > 0 && abs($supplierDifference) > 0.000001) {
+            si_post_supplier_ledger(
+                $conn,
+                $businessId,
+                (int)$item['branch_id'],
+                $supplierId,
+                'stock_inward_item_edit',
+                (int)$item['batch_id'],
+                abs($supplierDifference),
+                $supplierDifference > 0 ? 'add' : 'decrease',
+                'Stock item edited in batch: ' . (string)$item['batch_no']
+            );
+        }
+
+        if ($supplierId > 0) {
+            si_refresh_supplier_balance($conn, $businessId, $supplierId);
+        }
+
+        if (function_exists('log_activity')) {
+            try {
+                log_activity(
+                    $conn,
+                    'Stock Inward',
+                    'edit_stock_item',
+                    $stockItemId,
+                    null,
+                    [
+                        'batch_id' => (int)$item['batch_id'],
+                        'old_qty' => $oldQty,
+                        'new_qty' => $newQty,
+                        'barcode_preserved' => true,
+                    ]
+                );
+            } catch (Throwable $ignored) {}
+        }
+
+        mysqli_commit($conn);
+
+        return [
+            'stock_item_id' => $stockItemId,
+            'batch_id' => (int)$item['batch_id'],
+            'old_qty' => $oldQty,
+            'new_qty' => $newQty,
+            'available_qty' => $newAvailable,
+            'barcode_preserved' => true,
         ];
     } catch (Throwable $e) {
         mysqli_rollback($conn);
@@ -1271,6 +1636,19 @@ try {
             si_json(['success' => true, 'batch' => si_get_batch($conn, $businessId, $batchId, $allowedBranchIds)]);
         }
 
+        if ($action === 'get_stock_item') {
+            $stockItemId = (int)($_GET['stock_item_id'] ?? 0);
+            si_json([
+                'success' => true,
+                'item' => si_get_stock_item_for_edit(
+                    $conn,
+                    $businessId,
+                    $stockItemId,
+                    $allowedBranchIds
+                )
+            ]);
+        }
+
         si_json(['success' => false, 'message' => 'Invalid stock inward action.'], 400);
     }
 
@@ -1292,6 +1670,21 @@ try {
             si_json([
                 'success' => true,
                 'message' => 'Stock inward cancelled and supplier balance reversed successfully.',
+                'data' => $result,
+            ]);
+        }
+
+        if ($action === 'update_stock_item') {
+            $result = si_update_stock_item(
+                $conn,
+                $businessId,
+                $allowedBranchIds,
+                $permissions
+            );
+
+            si_json([
+                'success' => true,
+                'message' => 'Stock item updated successfully. Existing barcode was preserved.',
                 'data' => $result,
             ]);
         }

@@ -42,7 +42,7 @@ if ($businessId <= 0) { die('Business session missing. Please login again.'); }
     <title><?= e($pageTitle) ?> - GK Footwear POS</title>
     <?php include __DIR__ . '/includes/links.php'; ?>
     <style>
-    .master-page{font-family:"Inter","Segoe UI",Arial,sans-serif;font-size:12px;font-weight:500}.mp-hero,.mp-card,.mp-stat-card,.detail-box{background:var(--card-bg,#fff);border:1px solid var(--border-soft,#dbe4f0);border-radius:16px;box-shadow:0 8px 20px rgba(15,23,42,.06)}.mp-hero{padding:14px 16px}.mp-hero h1{font-size:20px;font-weight:800;margin:0 0 3px;letter-spacing:-.02em;color:var(--text-main,#0f172a)}.mp-hero p{font-size:11px;line-height:1.35;margin:0;color:var(--text-muted,#64748b);font-weight:500}.mp-hero .btn{font-size:11px;padding:7px 11px;min-height:32px;border-radius:999px;font-weight:700}.mp-stat-card{min-height:72px;padding:11px 12px;display:flex;align-items:center;gap:10px}.mp-stat-icon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;flex:0 0 auto}.mp-stat-icon svg{width:17px;height:17px}.mp-stat-label{font-size:10.5px;color:var(--text-muted,#64748b);font-weight:700;line-height:1.15;text-transform:uppercase;letter-spacing:.04em}.mp-stat-value{font-size:18px;color:var(--text-main,#0f172a);font-weight:800;margin:1px 0;line-height:1.05}.mp-stat-sub,.mp-sub{font-size:10px;color:var(--text-muted,#64748b);line-height:1.25}.mp-card{overflow:hidden}.mp-card-head{padding:12px 14px;border-bottom:1px solid var(--border-soft,#dbe4f0)}.mp-card-title{font-size:15px;font-weight:800;color:var(--text-main,#0f172a);margin:0 0 2px}.mp-card-sub{font-size:11px;color:var(--text-muted,#64748b);margin:0}.mp-filter-input,.mp-filter-select{min-height:32px;font-size:11px;border-radius:999px;padding:5px 10px;font-weight:650}.mp-table th{font-size:10px;font-weight:750;padding:9px 10px;white-space:nowrap;background:#f1f5f9;color:#0f172a;text-transform:uppercase;letter-spacing:.04em;border-bottom:0}.mp-table td{font-size:11px;padding:9px 10px;vertical-align:middle}.mp-avatar{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand-1,#2563eb),var(--brand-2,#7c3aed));color:#fff;font-size:13px;font-weight:800;flex:0 0 auto}.mp-title{font-size:12px;font-weight:800;color:var(--text-main,#0f172a);line-height:1.2}.mp-badge{border-radius:999px;padding:5px 8px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-paid{background:#dcfce7;color:#15803d}.status-partial{background:#fef3c7;color:#b45309}.status-pending{background:#fee2e2;color:#b91c1c}.badge-code{background:#dbeafe;color:#1d4ed8}.badge-branch{background:#ecfeff;color:#0e7490}.badge-money{background:#dcfce7;color:#15803d}.badge-due{background:#fee2e2;color:#b91c1c}.mp-action-btn{border-radius:999px;font-size:10.5px;font-weight:700;padding:5px 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1}.auto-print-frame{position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none}.mp-mobile-card{background:var(--card-bg,#fff);border:1px solid var(--border-soft,#dbe4f0);border-radius:14px;box-shadow:0 8px 20px rgba(15,23,42,.06);padding:10px}.detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.detail-box{background:#f8fafc;padding:10px;min-height:70px}.modal-title{font-size:15px;font-weight:750}.modal .form-label{font-size:11px;font-weight:700;margin-bottom:4px}.modal .form-control,.modal .form-select{min-height:34px;font-size:12px;border-radius:12px;padding:6px 10px}.modal-footer .btn{font-size:12px;padding:7px 12px;border-radius:12px;font-weight:700}.amount-positive{color:#15803d;font-weight:800}.amount-due{color:#b91c1c;font-weight:800}.pay-chip{border:1px solid var(--border-soft,#dbe4f0);border-radius:999px;padding:8px 12px;background:#fff;font-size:11px;font-weight:850;cursor:pointer}.pay-chip.active{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--brand-1,#2563eb),var(--brand-2,#7c3aed));box-shadow:0 8px 18px rgba(37,99,235,.22)}.payment-method-chips{display:flex;flex-wrap:wrap;gap:8px}.mixed-row{display:grid;grid-template-columns:1fr 130px 1fr;gap:8px;align-items:center;margin-bottom:8px}.scan-qr-btn{border-radius:999px;font-size:11px;font-weight:800;padding:7px 11px;display:inline-flex;align-items:center;gap:5px;line-height:1;background:#0f766e;color:#fff;border:1px solid #0f766e}.scan-qr-btn:hover{background:#115e59;color:#fff}.scanner-box{border:1px dashed #93c5fd;background:#eff6ff;border-radius:18px;padding:12px}.scanner-video{width:100%;min-height:280px;max-height:360px;object-fit:cover;background:#020617;border-radius:14px;border:1px solid #cbd5e1}.scanner-status{font-size:11px;font-weight:750;border-radius:14px;padding:9px 10px;background:#f8fafc;border:1px solid #dbe4f0;color:#334155}.scanner-status.success{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}.scanner-status.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}.manual-scan-card{border:1px solid #e2e8f0;background:#f8fafc;border-radius:16px;padding:12px}.scan-result-value{font-size:11px;word-break:break-all;color:#475569}.clickable-row{cursor:pointer}.clickable-row:hover{background:#f8fafc}@media(max-width:991px){.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:767px){.mp-hero{padding:12px}.mp-hero h1{font-size:19px}.mp-stat-card{min-height:64px;padding:9px 10px}.mp-stat-icon{width:34px;height:34px;border-radius:11px}.mp-stat-value{font-size:16px}.detail-grid,.mixed-row{grid-template-columns:1fr}}
+    .master-page{font-family:"Inter","Segoe UI",Arial,sans-serif;font-size:12px;font-weight:500}.mp-hero,.mp-card,.mp-stat-card,.detail-box{background:var(--card-bg,#fff);border:1px solid var(--border-soft,#dbe4f0);border-radius:16px;box-shadow:0 8px 20px rgba(15,23,42,.06)}.mp-hero{padding:14px 16px}.mp-hero h1{font-size:20px;font-weight:800;margin:0 0 3px;letter-spacing:-.02em;color:var(--text-main,#0f172a)}.mp-hero p{font-size:11px;line-height:1.35;margin:0;color:var(--text-muted,#64748b);font-weight:500}.mp-hero .btn{font-size:11px;padding:7px 11px;min-height:32px;border-radius:999px;font-weight:700}.mp-stat-card{min-height:72px;padding:11px 12px;display:flex;align-items:center;gap:10px}.mp-stat-icon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;flex:0 0 auto}.mp-stat-icon svg{width:17px;height:17px}.mp-stat-label{font-size:10.5px;color:var(--text-muted,#64748b);font-weight:700;line-height:1.15;text-transform:uppercase;letter-spacing:.04em}.mp-stat-value{font-size:18px;color:var(--text-main,#0f172a);font-weight:800;margin:1px 0;line-height:1.05}.mp-stat-sub,.mp-sub{font-size:10px;color:var(--text-muted,#64748b);line-height:1.25}.mp-card{overflow:hidden}.mp-card-head{padding:12px 14px;border-bottom:1px solid var(--border-soft,#dbe4f0)}.mp-card-title{font-size:15px;font-weight:800;color:var(--text-main,#0f172a);margin:0 0 2px}.mp-card-sub{font-size:11px;color:var(--text-muted,#64748b);margin:0}.mp-filter-input,.mp-filter-select{min-height:32px;font-size:11px;border-radius:999px;padding:5px 10px;font-weight:650}.mp-table th{font-size:10px;font-weight:750;padding:9px 10px;white-space:nowrap;background:#f1f5f9;color:#0f172a;text-transform:uppercase;letter-spacing:.04em;border-bottom:0}.mp-table td{font-size:11px;padding:9px 10px;vertical-align:middle}.mp-avatar{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand-1,#2563eb),var(--brand-2,#7c3aed));color:#fff;font-size:13px;font-weight:800;flex:0 0 auto}.mp-title{font-size:12px;font-weight:800;color:var(--text-main,#0f172a);line-height:1.2}.mp-badge{border-radius:999px;padding:5px 8px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.status-paid{background:#dcfce7;color:#15803d}.status-partial{background:#fef3c7;color:#b45309}.status-pending{background:#fee2e2;color:#b91c1c}.badge-code{background:#dbeafe;color:#1d4ed8}.badge-branch{background:#ecfeff;color:#0e7490}.badge-money{background:#dcfce7;color:#15803d}.badge-due{background:#fee2e2;color:#b91c1c}.mp-action-btn{border-radius:999px;font-size:10.5px;font-weight:700;padding:5px 8px;display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1}.mp-mobile-card{background:var(--card-bg,#fff);border:1px solid var(--border-soft,#dbe4f0);border-radius:14px;box-shadow:0 8px 20px rgba(15,23,42,.06);padding:10px}.detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.detail-box{background:#f8fafc;padding:10px;min-height:70px}.modal-title{font-size:15px;font-weight:750}.modal .form-label{font-size:11px;font-weight:700;margin-bottom:4px}.modal .form-control,.modal .form-select{min-height:34px;font-size:12px;border-radius:12px;padding:6px 10px}.modal-footer .btn{font-size:12px;padding:7px 12px;border-radius:12px;font-weight:700}.amount-positive{color:#15803d;font-weight:800}.amount-due{color:#b91c1c;font-weight:800}.pay-chip{border:1px solid var(--border-soft,#dbe4f0);border-radius:999px;padding:8px 12px;background:#fff;font-size:11px;font-weight:850;cursor:pointer}.pay-chip.active{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--brand-1,#2563eb),var(--brand-2,#7c3aed));box-shadow:0 8px 18px rgba(37,99,235,.22)}.payment-method-chips{display:flex;flex-wrap:wrap;gap:8px}.mixed-row{display:grid;grid-template-columns:1fr 130px 1fr;gap:8px;align-items:center;margin-bottom:8px}.scan-qr-btn{border-radius:999px;font-size:11px;font-weight:800;padding:7px 11px;display:inline-flex;align-items:center;gap:5px;line-height:1;background:#0f766e;color:#fff;border:1px solid #0f766e}.scan-qr-btn:hover{background:#115e59;color:#fff}.scanner-box{border:1px dashed #93c5fd;background:#eff6ff;border-radius:18px;padding:12px}.scanner-video{width:100%;min-height:280px;max-height:360px;object-fit:cover;background:#020617;border-radius:14px;border:1px solid #cbd5e1}.scanner-status{font-size:11px;font-weight:750;border-radius:14px;padding:9px 10px;background:#f8fafc;border:1px solid #dbe4f0;color:#334155}.scanner-status.success{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}.scanner-status.error{background:#fef2f2;color:#b91c1c;border-color:#fecaca}.manual-scan-card{border:1px solid #e2e8f0;background:#f8fafc;border-radius:16px;padding:12px}.scan-result-value{font-size:11px;word-break:break-all;color:#475569}.clickable-row{cursor:pointer}.clickable-row:hover{background:#f8fafc}@media(max-width:991px){.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:767px){.mp-hero{padding:12px}.mp-hero h1{font-size:19px}.mp-stat-card{min-height:64px;padding:9px 10px}.mp-stat-icon{width:34px;height:34px;border-radius:11px}.mp-stat-value{font-size:16px}.detail-grid,.mixed-row{grid-template-columns:1fr}}
     
     .collection-gst-card{border:1px dashed #93c5fd;background:linear-gradient(180deg,#eff6ff,#fff);box-shadow:0 8px 18px rgba(37,99,235,.08)}
     .gst-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
@@ -168,8 +168,6 @@ if ($businessId <= 0) { die('Business session missing. Please login again.'); }
         </div>
     </div>
 </div>
-
-<iframe id="autoThermalPrintFrame" class="auto-print-frame" title="Auto thermal receipt print"></iframe>
 
 <?php include __DIR__ . '/includes/script.php'; ?>
 <script>
@@ -411,11 +409,14 @@ async function openPayment(id){
     }catch(e){showMessage('error','Unable to fetch invoice.');}
 }
 
-function autoPrintThermalReceipt(billId,gst,collectionAmount){
+async function autoPrintThermalReceipt(billId,gst,collectionAmount){
     billId=parseInt(billId||0,10);
-    if(!billId){return;}
+    if(!billId){
+        throw new Error('Invalid bill id for thermal printing.');
+    }
 
     gst=gst||collectionGstSummary();
+
     const params=new URLSearchParams();
     params.set('bill_id',billId);
     params.set('auto_print','1');
@@ -424,8 +425,8 @@ function autoPrintThermalReceipt(billId,gst,collectionAmount){
     params.set('base_due_amount',num(state.bill&&state.bill.balance_amount).toFixed(2));
     params.set('collection_total_amount',collectionDueTotal(gst).toFixed(2));
     params.set('payment_method_name',selectedMethod().payment_method_name||selectedMethod().method_type||'Payment');
-    // FIX: Add collected_by from PHP
-    const collectedBy = <?= json_encode($cashierName) ?>;
+
+    const collectedBy=<?= json_encode($cashierName) ?>;
     params.set('collected_by',collectedBy);
     params.set('gst_enabled',gst.enabled?1:0);
     params.set('gst_mode',gst.mode||'intra');
@@ -436,29 +437,57 @@ function autoPrintThermalReceipt(billId,gst,collectionAmount){
     params.set('igst_amount',num(gst.igst).toFixed(2));
     params.set('tax_amount',num(gst.gstAmount).toFixed(2));
 
+    /*
+     * IMPORTANT:
+     * The receipt endpoint itself sends the receipt to the local .NET
+     * thermal-print service. Fetch it silently so the browser does not:
+     *  - load the JSON response in an iframe,
+     *  - call window.print(),
+     *  - open a new tab,
+     *  - show the browser print-preview dialog.
+     */
     const printUrl='cashier-thermal-receipt.php?'+params.toString();
-    const frame=$('autoThermalPrintFrame');
+    const response=await fetch(printUrl,{
+        method:'GET',
+        credentials:'same-origin',
+        cache:'no-store',
+        headers:{
+            'Accept':'application/json',
+            'X-Requested-With':'XMLHttpRequest'
+        }
+    });
 
-    if(frame){
-        let printed=false;
-        frame.onload=function(){
-            if(printed){return;}
-            printed=true;
-            try{
-                if(frame.contentWindow){
-                    frame.contentWindow.focus();
-                    setTimeout(()=>frame.contentWindow.print(),500);
-                    return;
-                }
-            }catch(e){}
-            window.open(printUrl,'_blank','noopener');
-        };
-        frame.src=printUrl+'&t='+(Date.now());
-        setTimeout(function(){if(!printed){window.open(printUrl,'_blank','noopener');}},2200);
-        return;
+    const raw=await response.text();
+    let result=null;
+
+    try{
+        result=raw?JSON.parse(raw):null;
+    }catch(error){
+        throw new Error('Thermal print service returned an invalid response.');
     }
 
-    window.open(printUrl,'_blank','noopener');
+    if(!response.ok){
+        throw new Error((result&&result.message)||('Thermal print request failed with HTTP '+response.status+'.'));
+    }
+
+    if(!result||result.success!==true){
+        throw new Error((result&&result.message)||'Thermal printer did not confirm the print job.');
+    }
+
+    const printResponse=String(
+        (result.data&&result.data.print_response)||
+        result.print_response||
+        ''
+    ).toUpperCase();
+
+    if(printResponse&&
+       !printResponse.includes('SUCCESS')&&
+       !printResponse.includes('PRINTED')&&
+       printResponse!=='OK'){
+        throw new Error((result&&result.message)||('Printer response: '+printResponse));
+    }
+
+    return result;
 }
 
 function mixedPayload(){if(!isSplit())return null;const rows=[];document.querySelectorAll('.mixed-amount').forEach(input=>{const methodId=parseInt(input.dataset.methodId,10);const amount=num(input.value);const ref=document.querySelector('.mixed-ref[data-method-id="'+methodId+'"]');if(amount>0)rows.push({payment_method_id:methodId,amount_collected:amount,reference_no:ref?ref.value:'',payment_note:($('payment_note')||{}).value||''});});return rows;}
@@ -524,8 +553,18 @@ async function collectPayment(printAfter){
             return;
         }
 
-        showMessage('success',data.message||'Payment collected successfully. Printing final thermal invoice...');
-        autoPrintThermalReceipt(billId,gst,amount);
+        let successMessage=data.message||'Payment collected successfully.';
+        if(printAfter){
+            try{
+                await autoPrintThermalReceipt(billId,gst,amount);
+                successMessage+=' Receipt printed successfully.';
+                showMessage('success',successMessage);
+            }catch(printError){
+                showMessage('warning',successMessage+' Payment is saved, but thermal printing failed: '+(printError.message||'Unknown printer error.'));
+            }
+        }else{
+            showMessage('success',successMessage);
+        }
 
         if(modal)modal.hide();
 
