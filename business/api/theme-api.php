@@ -26,7 +26,7 @@ if (!table_exists($conn, 'website_color_settings')) {
     exit;
 }
 
-$allowed = [
+$colorSettings = [
     'body_bg' => 'Body Background',
     'topbar_bg' => 'Topbar Background',
     'topbar_text' => 'Topbar Text',
@@ -60,64 +60,231 @@ $allowed = [
     'info_color' => 'Info Color',
 ];
 
-$businessId = current_business_id();
-$userId = current_user_id();
+$typographySettings = [
+    'font_family' => 'Font Family',
+    'base_font_size' => 'Base Font Size',
+    'heading_font_size' => 'Heading Font Size',
+    'font_weight' => 'Default Font Weight',
+    'heading_font_weight' => 'Heading Font Weight',
+    'line_height' => 'Line Height',
+    'letter_spacing' => 'Letter Spacing',
+    'button_text_transform' => 'Button Text Style',
+];
+
+$allowedFontFamilies = [
+    'Inter, "Segoe UI", Arial, sans-serif',
+    '"Segoe UI", Arial, sans-serif',
+    'Arial, Helvetica, sans-serif',
+    'Roboto, Arial, sans-serif',
+    'Poppins, Arial, sans-serif',
+    'Georgia, "Times New Roman", serif',
+];
+
+$allowedTextTransforms = ['none', 'uppercase', 'capitalize'];
+$allowedFontWeights = ['400', '500', '600', '700', '800', '900'];
+
+function valid_theme_color(string $value): bool
+{
+    return (bool)(
+        preg_match('/^#[a-fA-F0-9]{6}$/', $value) ||
+        preg_match('/^rgba?\(\s*(?:\d{1,3}\s*,\s*){2}\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/', $value)
+    );
+}
+
+function valid_typography_setting(
+    string $key,
+    string $value,
+    array $fontFamilies,
+    array $fontWeights,
+    array $textTransforms
+): bool {
+    switch ($key) {
+        case 'font_family':
+            return in_array($value, $fontFamilies, true);
+
+        case 'base_font_size':
+            return is_numeric($value) && (float)$value >= 10 && (float)$value <= 24;
+
+        case 'heading_font_size':
+            return is_numeric($value) && (float)$value >= 14 && (float)$value <= 48;
+
+        case 'font_weight':
+        case 'heading_font_weight':
+            return in_array($value, $fontWeights, true);
+
+        case 'line_height':
+            return is_numeric($value) && (float)$value >= 1 && (float)$value <= 2.5;
+
+        case 'letter_spacing':
+            return is_numeric($value) && (float)$value >= -2 && (float)$value <= 5;
+
+        case 'button_text_transform':
+            return in_array($value, $textTransforms, true);
+    }
+
+    return false;
+}
+
+$businessId = (int) current_business_id();
+$userId = (int) current_user_id();
 $hasBusinessId = table_has_column($conn, 'website_color_settings', 'business_id');
+$saveScope = strtolower(trim((string)($_POST['save_scope'] ?? 'all')));
+if (!in_array($saveScope, ['all', 'colors', 'typography'], true)) {
+    $saveScope = 'all';
+}
+
 $updated = 0;
 
 mysqli_begin_transaction($conn);
 
 try {
-    foreach ($allowed as $key => $label) {
-        $value = trim($_POST[$key] ?? '');
+    $settings = [];
 
-        if ($value === '') {
+    if ($saveScope === 'all' || $saveScope === 'colors') {
+    foreach ($colorSettings as $key => $label) {
+        $value = trim((string)($_POST[$key] ?? ''));
+        if ($value === '' || !valid_theme_color($value)) {
             continue;
         }
 
-        if (!preg_match('/^#[a-fA-F0-9]{6}$/', $value) && !preg_match('/^rgba?\([0-9\s,.]+\)$/', $value)) {
+        $settings[] = [
+            'key' => $key,
+            'value' => $value,
+            'label' => $label,
+            'group' => 'layout',
+        ];
+    }
+
+    }
+
+    if ($saveScope === 'all' || $saveScope === 'typography') {
+    foreach ($typographySettings as $key => $label) {
+        $value = trim((string)($_POST[$key] ?? ''));
+        if (
+            $value === '' ||
+            !valid_typography_setting(
+                $key,
+                $value,
+                $allowedFontFamilies,
+                $allowedFontWeights,
+                $allowedTextTransforms
+            )
+        ) {
             continue;
         }
+
+        $settings[] = [
+            'key' => $key,
+            'value' => $value,
+            'label' => $label,
+            'group' => 'typography',
+        ];
+    }
+
+    }
+
+    foreach ($settings as $setting) {
+        $key = $setting['key'];
+        $value = $setting['value'];
+        $label = $setting['label'];
+        $group = $setting['group'];
 
         if ($hasBusinessId) {
             $stmt = mysqli_prepare($conn, "
                 INSERT INTO website_color_settings
-                (business_id, setting_key, setting_value, setting_label, setting_group, updated_by, is_active)
-                VALUES (?, ?, ?, ?, 'layout', ?, 1)
+                    (business_id, setting_key, setting_value, setting_label, setting_group, updated_by, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
                 ON DUPLICATE KEY UPDATE
                     setting_value = VALUES(setting_value),
                     setting_label = VALUES(setting_label),
+                    setting_group = VALUES(setting_group),
                     updated_by = VALUES(updated_by),
                     updated_at = CURRENT_TIMESTAMP,
                     is_active = 1
             ");
-            mysqli_stmt_bind_param($stmt, "isssi", $businessId, $key, $value, $label, $userId);
+
+            if (!$stmt) {
+                throw new RuntimeException(mysqli_error($conn));
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "issssi",
+                $businessId,
+                $key,
+                $value,
+                $label,
+                $group,
+                $userId
+            );
         } else {
             $stmt = mysqli_prepare($conn, "
                 INSERT INTO website_color_settings
-                (setting_key, setting_value, setting_label, setting_group, updated_by, is_active)
-                VALUES (?, ?, ?, 'layout', ?, 1)
+                    (setting_key, setting_value, setting_label, setting_group, updated_by, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
                 ON DUPLICATE KEY UPDATE
                     setting_value = VALUES(setting_value),
                     setting_label = VALUES(setting_label),
+                    setting_group = VALUES(setting_group),
                     updated_by = VALUES(updated_by),
                     updated_at = CURRENT_TIMESTAMP,
                     is_active = 1
             ");
-            mysqli_stmt_bind_param($stmt, "sssi", $key, $value, $label, $userId);
+
+            if (!$stmt) {
+                throw new RuntimeException(mysqli_error($conn));
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "ssssi",
+                $key,
+                $value,
+                $label,
+                $group,
+                $userId
+            );
         }
 
-        mysqli_stmt_execute($stmt);
+        if (!mysqli_stmt_execute($stmt)) {
+            $error = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            throw new RuntimeException($error);
+        }
+
         mysqli_stmt_close($stmt);
         $updated++;
     }
 
-    log_activity($conn, 'Theme', 'update', null, null, ['updated' => $updated]);
+    log_activity($conn, 'Theme', 'update', null, null, [
+        'updated' => $updated,
+        'save_scope' => $saveScope,
+        'color_settings' => count($colorSettings),
+        'typography_settings' => count($typographySettings),
+    ]);
+
     mysqli_commit($conn);
 
-    echo json_encode(['ok' => true, 'message' => 'Theme colors saved successfully.']);
+    $message = 'Theme colors and typography saved successfully.';
+
+    if ($saveScope === 'typography') {
+        $message = 'Typography and text controls saved successfully.';
+    } elseif ($saveScope === 'colors') {
+        $message = 'Theme colors saved successfully.';
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'message' => $message,
+        'updated' => $updated,
+        'save_scope' => $saveScope,
+    ]);
 } catch (Throwable $e) {
     mysqli_rollback($conn);
-    echo json_encode(['ok' => false, 'message' => $e->getMessage()]);
+
+    echo json_encode([
+        'ok' => false,
+        'message' => $e->getMessage(),
+    ]);
 }
 ?>

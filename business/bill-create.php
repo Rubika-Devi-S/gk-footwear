@@ -2197,78 +2197,147 @@ if ($businessId <= 0) {
 
     function parseCompactDate(value, allowPlainText) {
         const raw = String(value || '').trim();
-        if (!raw) return '';
-        let match = raw.match(/(20\d{2})[-\/\.](0?[1-9]|1[0-2])[-\/\.](0?[1-9]|[12]\d|3[01])/);
-        if (!match) {
-            match = raw.match(/(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])/);
+
+        if (!raw || raw === '0000-00-00' || raw === '0000-00-00 00:00:00' || raw.toLowerCase() === 'null') {
+            return '';
         }
-        if (!match) {
+
+        let year = '';
+        let month = '';
+        let day = '';
+        let match = null;
+
+        // Database/ISO formats:
+        // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD and timestamps beginning with the date.
+        match = raw.match(/^(20\d{2})[-\/.](0?[1-9]|1[0-2])[-\/.](0?[1-9]|[12]\d|3[01])(?:\s|T|$)/);
+        if (match) {
+            year = match[1];
+            month = match[2];
+            day = match[3];
+        }
+
+        // Compact database format: YYYYMMDD.
+        if (!year) {
+            match = raw.match(/^(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])$/);
+            if (match) {
+                year = match[1];
+                month = match[2];
+                day = match[3];
+            }
+        }
+
+        // Indian/display formats: DD-MM-YYYY, DD/MM/YYYY and DD.MM.YYYY.
+        if (!year) {
+            match = raw.match(/^(0?[1-9]|[12]\d|3[01])[-\/.](0?[1-9]|1[0-2])[-\/.](20\d{2})(?:\s|$)/);
+            if (match) {
+                day = match[1];
+                month = match[2];
+                year = match[3];
+            }
+        }
+
+        if (!year) {
             return allowPlainText ? (raw.length > 18 ? raw.substring(0, 18) : raw) : '';
         }
-        const year = match[1];
-        const month = String(match[2]).padStart(2, '0');
-        const day = String(match[3]).padStart(2, '0');
-        const date = new Date(year + '-' + month + '-' + day + 'T00:00:00');
-        if (Number.isNaN(date.getTime())) {
-            return day + '-' + month + '-' + year;
+
+        year = String(year);
+        month = String(month).padStart(2, '0');
+        day = String(day).padStart(2, '0');
+
+        // Validate without using Date parsing, avoiding browser timezone conversion.
+        const monthNumber = Number(month);
+        const dayNumber = Number(day);
+        const yearNumber = Number(year);
+        const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate();
+
+        if (
+            yearNumber < 2000 ||
+            monthNumber < 1 ||
+            monthNumber > 12 ||
+            dayNumber < 1 ||
+            dayNumber > daysInMonth
+        ) {
+            return '';
         }
-        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+        const monthNames = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+
+        return day + ' ' + monthNames[monthNumber - 1] + ' ' + year;
     }
 
     function compactDateCandidate(value) {
-        if (value === undefined || value === null) return '';
-        if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) {
-                const v = compactDateCandidate(value[i]);
-                if (v) return v;
-            }
+        if (value === undefined || value === null) {
             return '';
         }
-        if (typeof value === 'object') {
-            return compactDateCandidate(value.stock_entry_date || value.entry_date || value.inward_date || value.created_at || '');
+
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                const candidate = compactDateCandidate(value[i]);
+                if (candidate) {
+                    return candidate;
+                }
+            }
+
+            return '';
         }
-        const text = String(value).trim();
-        if (!text || text === '0000-00-00' || text === '0000-00-00 00:00:00' || text.toLowerCase() === 'null') return '';
-        return text;
+
+        if (typeof value === 'object') {
+            return compactDateCandidate([
+                value.stock_entry_date,
+                value.stockEntryDate,
+                value.inward_date,
+                value.inwardDate,
+                value.entry_date,
+                value.entryDate,
+                value.purchase_date,
+                value.purchaseDate,
+                value.batch_entry_date,
+                value.batchEntryDate,
+                value.batch_inward_date,
+                value.batchInwardDate
+            ]);
+        }
+
+        const valueText = String(value).trim();
+
+        if (
+            !valueText ||
+            valueText === '0000-00-00' ||
+            valueText === '0000-00-00 00:00:00' ||
+            valueText.toLowerCase() === 'null'
+        ) {
+            return '';
+        }
+
+        return valueText;
     }
 
     function stockEntryDate(product) {
         product = product || {};
-        const directDate = compactDateCandidate([
+
+        // Use only the actual stock/purchase entry date supplied by the POS API.
+        // Do not derive dates from barcode values, batch numbers or generic created_at values.
+        const actualEntryDate = compactDateCandidate([
             product.stock_entry_date,
             product.stockEntryDate,
+            product.inward_date,
+            product.inwardDate,
             product.entry_date,
             product.entryDate,
             product.product_entry_date,
             product.productEntryDate,
-            product.stock_date,
-            product.inward_date,
-            product.inwardDate,
             product.purchase_date,
             product.purchaseDate,
             product.batch_entry_date,
             product.batchEntryDate,
             product.batch_inward_date,
-            product.batchInwardDate,
-            product.batch_date,
-            product.batchDate,
-            product.created_at,
-            product.createdAt,
-            product.date_time,
-            product.batch,
-            product.item
+            product.batchInwardDate
         ]);
-        const formattedDirect = parseCompactDate(directDate, false);
-        if (formattedDirect) return formattedDirect;
-        const barcodeDate = parseCompactDate(compactDateCandidate([
-            product.barcode_value,
-            product.barcode_values,
-            product.stock_barcode,
-            product.stockBarcode,
-            product.batch_no,
-            product.stock_batch_no
-        ]), false);
-        return barcodeDate || '';
+
+        return parseCompactDate(actualEntryDate, false);
     }
 
     function stockEntryDateText(product) {

@@ -83,6 +83,9 @@ if ($businessId <= 0) {
     .selected-product-box{border:1px solid #dbe4f0;background:#fff;border-radius:12px;padding:8px;margin-top:8px}
     .history-card{border:1px solid #dbe4f0;border-radius:14px;padding:10px;background:#fff}
     .live-note{border:1px dashed #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:14px;padding:9px 11px;font-size:11px;font-weight:700}
+    .return-policy-note{border:1px solid #bbf7d0;background:#f0fdf4;color:#15803d;border-radius:14px;padding:10px 12px;font-size:11px;font-weight:800;line-height:1.4;margin-top:10px}
+    .return-policy-note.expired{border-color:#fecaca;background:#fef2f2;color:#b91c1c}
+    .return-policy-note.warning{border-color:#fde68a;background:#fffbeb;color:#92400e}
     .bill-search-wrap{display:grid;grid-template-columns:minmax(260px,1fr) auto auto;gap:8px;align-items:center}
     .scan-ready{box-shadow:0 0 0 .18rem rgba(37,99,235,.18)!important;border-color:#2563eb!important}
     .scan-helper{font-size:10px;font-weight:800;color:#1d4ed8;margin-top:6px}
@@ -130,6 +133,9 @@ if ($businessId <= 0) {
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button" id="resetPage" class="btn btn-outline-primary">
                             <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Reset
+                        </button>
+                        <button type="button" id="returnPeriodSettingsBtn" class="btn btn-outline-dark">
+                            <i data-lucide="settings" style="width:14px;height:14px;"></i> Period Settings
                         </button>
                     </div>
                 </div>
@@ -197,7 +203,7 @@ if ($businessId <= 0) {
                 <section class="mp-card" id="returnPanel">
                     <div class="mp-card-head">
                         <h2 class="mp-card-title">Return Products</h2>
-                        <p class="mp-card-sub">Select one or more products, enter return quantity and choose refund option.</p>
+                        <p class="mp-card-sub">Eligibility is based on the configured Return & Exchange period from the original bill date and time. Select products, enter return quantity and choose refund option.</p>
                     </div>
                     <div class="p-3">
                         <div class="work-panel mb-3">
@@ -237,7 +243,7 @@ if ($businessId <= 0) {
                 <section class="mp-card d-none" id="exchangePanel">
                     <div class="mp-card-head">
                         <h2 class="mp-card-title">Exchange Product</h2>
-                        <p class="mp-card-sub">Select original product, search/select new product, verify stock and confirm exchange.</p>
+                        <p class="mp-card-sub">Eligibility is based on the configured Return & Exchange period from the original bill date and time. Select the original and replacement products, then confirm exchange.</p>
                     </div>
                     <div class="p-3">
                         <div class="work-panel mb-3">
@@ -300,6 +306,55 @@ if ($businessId <= 0) {
 </div>
 
 <!-- ============================================ -->
+<!-- RETURN & EXCHANGE PERIOD SETTINGS MODAL -->
+<!-- ============================================ -->
+<div class="modal fade" id="returnPeriodSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Return & Exchange Period Settings</h5>
+                    <div class="mp-sub">Increase or reduce the allowed return and exchange period.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    The expiry time is calculated from the original bill date and bill time.
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold">Allowed Days</label>
+                        <input type="number" id="returnPeriodDays" class="form-control" min="0" max="365" step="1" value="3">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold">Additional Hours</label>
+                        <input type="number" id="returnPeriodHours" class="form-control" min="0" max="23" step="1" value="0">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label fw-bold">Quick Period</label>
+                    <select id="returnPeriodQuickSelect" class="form-select">
+                        <option value="">Custom</option>
+                        <option value="1">1 Day</option>
+                        <option value="3">3 Days</option>
+                        <option value="5">5 Days</option>
+                        <option value="7">7 Days</option>
+                        <option value="15">15 Days</option>
+                        <option value="30">30 Days</option>
+                    </select>
+                </div>
+                <div id="returnPeriodPreview" class="return-policy-note mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="resetReturnPeriodBtn" class="btn btn-outline-secondary">Reset to 3 Days</button>
+                <button type="button" id="saveReturnPeriodBtn" class="btn btn-primary">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
 <!-- CAMERA SCANNER MODAL -->
 <!-- ============================================ -->
 <div class="modal fade" id="scannerModal" tabindex="-1" aria-hidden="true">
@@ -352,7 +407,14 @@ if ($businessId <= 0) {
         tab: 'return',
         selectedProducts: {},
         productSearchResults: {},
-        productSearchTimers: {}
+        productSearchTimers: {},
+        eligibility: {
+            allowed: false,
+            ageDays: null,
+            expiryDate: '',
+            expiryDateTime: '',
+            message: ''
+        }
     };
 
     // ============================================
@@ -366,6 +428,224 @@ if ($businessId <= 0) {
     const apiUrl = 'api/return-exchange-api.php';
     const printServiceUrl = 'http://127.0.0.1:17900/';
     const money = new Intl.NumberFormat('en-IN', { style:'currency', currency:'INR' });
+
+    const RETURN_EXCHANGE_SETTINGS_KEY = 'gk_return_exchange_period_settings';
+    const DEFAULT_RETURN_EXCHANGE_DAYS = 3;
+    const DEFAULT_RETURN_EXCHANGE_HOURS = 0;
+
+    function getReturnExchangePeriodSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(RETURN_EXCHANGE_SETTINGS_KEY) || '{}');
+            const days = Math.max(0, Math.min(365, parseInt(saved.days, 10) || DEFAULT_RETURN_EXCHANGE_DAYS));
+            const hours = Math.max(0, Math.min(23, parseInt(saved.hours, 10) || 0));
+            return { days: days, hours: hours };
+        } catch (error) {
+            return { days: DEFAULT_RETURN_EXCHANGE_DAYS, hours: DEFAULT_RETURN_EXCHANGE_HOURS };
+        }
+    }
+
+    function getReturnExchangeLimitMs() {
+        const settings = getReturnExchangePeriodSettings();
+        return ((settings.days * 24) + settings.hours) * 60 * 60 * 1000;
+    }
+
+    function getReturnExchangePeriodLabel() {
+        const settings = getReturnExchangePeriodSettings();
+        const parts = [];
+        if (settings.days > 0) parts.push(settings.days + ' day' + (settings.days === 1 ? '' : 's'));
+        if (settings.hours > 0) parts.push(settings.hours + ' hour' + (settings.hours === 1 ? '' : 's'));
+        return parts.length ? parts.join(' ') : '0 hours';
+    }
+
+    function parseBillDateTimeLocal(bill) {
+        bill = bill || {};
+
+        const dateRaw = String(
+            bill.bill_date ||
+            bill.invoice_date ||
+            bill.sale_date ||
+            bill.created_date ||
+            ''
+        ).trim();
+
+        const timeRaw = String(
+            bill.bill_time ||
+            bill.invoice_time ||
+            bill.sale_time ||
+            ''
+        ).trim();
+
+        let combinedRaw = dateRaw;
+        if (!combinedRaw && bill.created_at) {
+            combinedRaw = String(bill.created_at).trim();
+        }
+
+        if (!combinedRaw || combinedRaw === '0000-00-00' || combinedRaw === '0000-00-00 00:00:00') {
+            return null;
+        }
+
+        let year, month, day, hour = 0, minute = 0, second = 0;
+        let match = combinedRaw.match(
+            /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+        );
+
+        if (match) {
+            year = Number(match[1]);
+            month = Number(match[2]);
+            day = Number(match[3]);
+            hour = Number(match[4] || 0);
+            minute = Number(match[5] || 0);
+            second = Number(match[6] || 0);
+        } else {
+            match = combinedRaw.match(
+                /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i
+            );
+
+            if (!match) {
+                return null;
+            }
+
+            day = Number(match[1]);
+            month = Number(match[2]);
+            year = Number(match[3]);
+            hour = Number(match[4] || 0);
+            minute = Number(match[5] || 0);
+            second = Number(match[6] || 0);
+
+            const meridiem = String(match[7] || '').toUpperCase();
+            if (meridiem === 'PM' && hour < 12) hour += 12;
+            if (meridiem === 'AM' && hour === 12) hour = 0;
+        }
+
+        // Prefer the separate database bill_time when supplied.
+        if (timeRaw) {
+            const timeMatch = timeRaw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+            if (timeMatch) {
+                hour = Number(timeMatch[1] || 0);
+                minute = Number(timeMatch[2] || 0);
+                second = Number(timeMatch[3] || 0);
+
+                const meridiem = String(timeMatch[4] || '').toUpperCase();
+                if (meridiem === 'PM' && hour < 12) hour += 12;
+                if (meridiem === 'AM' && hour === 12) hour = 0;
+            }
+        }
+
+        const date = new Date(year, month - 1, day, hour, minute, second, 0);
+
+        if (
+            date.getFullYear() !== year ||
+            date.getMonth() !== month - 1 ||
+            date.getDate() !== day ||
+            date.getHours() !== hour ||
+            date.getMinutes() !== minute ||
+            date.getSeconds() !== second
+        ) {
+            return null;
+        }
+
+        return date;
+    }
+
+    function formatPolicyDateTime(date) {
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+            return '-';
+        }
+
+        return date.toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+    }
+
+    function formatRemainingPolicyTime(milliseconds) {
+        const totalMinutes = Math.max(0, Math.ceil(milliseconds / 60000));
+        const days = Math.floor(totalMinutes / 1440);
+        const hours = Math.floor((totalMinutes % 1440) / 60);
+        const minutes = totalMinutes % 60;
+
+        const parts = [];
+        if (days > 0) parts.push(days + ' day' + (days === 1 ? '' : 's'));
+        if (hours > 0) parts.push(hours + ' hour' + (hours === 1 ? '' : 's'));
+        if (minutes > 0 || !parts.length) parts.push(minutes + ' minute' + (minutes === 1 ? '' : 's'));
+
+        return parts.join(' ');
+    }
+
+    function getReturnExchangeEligibility(bill) {
+        bill = bill || {};
+
+        const billDateTime = parseBillDateTimeLocal(bill);
+
+        if (!billDateTime) {
+            return {
+                allowed: false,
+                ageDays: null,
+                expiryDate: '',
+                expiryDateTime: '',
+                message: 'Return and exchange are blocked because the original bill date or time is missing or invalid.'
+            };
+        }
+
+        const now = new Date();
+        const expiryDateTime = new Date(billDateTime.getTime() + getReturnExchangeLimitMs());
+        const elapsedMs = now.getTime() - billDateTime.getTime();
+        const ageDays = elapsedMs / 86400000;
+
+        if (elapsedMs < 0) {
+            return {
+                allowed: false,
+                ageDays: ageDays,
+                expiryDate: formatPolicyDateTime(expiryDateTime),
+                expiryDateTime: formatPolicyDateTime(expiryDateTime),
+                message: 'Return and exchange are blocked because the bill date and time are in the future.'
+            };
+        }
+
+        if (now.getTime() > expiryDateTime.getTime()) {
+            return {
+                allowed: false,
+                ageDays: ageDays,
+                expiryDate: formatPolicyDateTime(expiryDateTime),
+                expiryDateTime: formatPolicyDateTime(expiryDateTime),
+                message: 'Return and exchange period expired. Only bills within ' +
+                    getReturnExchangePeriodLabel() +
+                    ' are allowed. Expired on ' +
+                    formatPolicyDateTime(expiryDateTime) +
+                    '.'
+            };
+        }
+
+        const remainingMs = expiryDateTime.getTime() - now.getTime();
+
+        return {
+            allowed: true,
+            ageDays: ageDays,
+            expiryDate: formatPolicyDateTime(expiryDateTime),
+            expiryDateTime: formatPolicyDateTime(expiryDateTime),
+            message: 'Eligible for return or exchange. ' +
+                formatRemainingPolicyTime(remainingMs) +
+                ' remaining. Expires on ' +
+                formatPolicyDateTime(expiryDateTime) +
+                '.'
+        };
+    }
+
+    function ensureReturnExchangeEligible() {
+        const eligibility = getReturnExchangeEligibility(returnExchangeState.bill);
+        returnExchangeState.eligibility = eligibility;
+
+        if (!eligibility.allowed) {
+            showMessage('warning', eligibility.message);
+            return false;
+        }
+
+        return true;
+    }
 
     function csrfToken() {
         const input = document.querySelector('#returnExchangeSecurityForm input[name="csrf_token"], #returnExchangeSecurityForm input[name="_token"], #returnExchangeSecurityForm input[type="hidden"]');
@@ -420,6 +700,85 @@ if ($businessId <= 0) {
         form.append('csrf_token', csrfToken());
         const response = await fetch(apiUrl, { method:'POST', credentials:'same-origin', headers:{'Accept':'application/json'}, body:form });
         return await response.json();
+    }
+
+    // ============================================
+    // RETURN & EXCHANGE PERIOD SETTINGS
+    // ============================================
+    let returnPeriodSettingsModal = null;
+
+    function getReturnPeriodSettingsModal() {
+        if (!window.bootstrap) return null;
+        if (!returnPeriodSettingsModal) {
+            returnPeriodSettingsModal = new bootstrap.Modal(document.getElementById('returnPeriodSettingsModal'));
+        }
+        return returnPeriodSettingsModal;
+    }
+
+    function updateReturnPeriodPreview() {
+        const daysInput = document.getElementById('returnPeriodDays');
+        const hoursInput = document.getElementById('returnPeriodHours');
+        const preview = document.getElementById('returnPeriodPreview');
+        if (!daysInput || !hoursInput || !preview) return;
+
+        const days = Math.max(0, Math.min(365, parseInt(daysInput.value, 10) || 0));
+        const hours = Math.max(0, Math.min(23, parseInt(hoursInput.value, 10) || 0));
+        const parts = [];
+
+        if (days > 0) parts.push(days + ' day' + (days === 1 ? '' : 's'));
+        if (hours > 0) parts.push(hours + ' hour' + (hours === 1 ? '' : 's'));
+
+        preview.textContent = 'Current allowed period: ' + (parts.length ? parts.join(' ') : '0 hours') + '.';
+    }
+
+    function openReturnPeriodSettings() {
+        const settings = getReturnExchangePeriodSettings();
+        document.getElementById('returnPeriodDays').value = settings.days;
+        document.getElementById('returnPeriodHours').value = settings.hours;
+        document.getElementById('returnPeriodQuickSelect').value =
+            settings.hours === 0 && [1,3,5,7,15,30].includes(settings.days)
+                ? String(settings.days)
+                : '';
+        updateReturnPeriodPreview();
+
+        const modal = getReturnPeriodSettingsModal();
+        if (modal) modal.show();
+    }
+
+    function saveReturnPeriodSettings() {
+        const days = Math.max(0, Math.min(365, parseInt(document.getElementById('returnPeriodDays').value, 10) || 0));
+        const hours = Math.max(0, Math.min(23, parseInt(document.getElementById('returnPeriodHours').value, 10) || 0));
+
+        if (days === 0 && hours === 0) {
+            showMessage('warning', 'Return and exchange period must be at least 1 hour.');
+            return;
+        }
+
+        localStorage.setItem(RETURN_EXCHANGE_SETTINGS_KEY, JSON.stringify({
+            days: days,
+            hours: hours
+        }));
+
+        const modal = getReturnPeriodSettingsModal();
+        if (modal) modal.hide();
+
+        showMessage('success', 'Return and exchange period updated to ' + getReturnExchangePeriodLabel() + '.');
+
+        if (returnExchangeState.bill) {
+            renderBill();
+        }
+    }
+
+    function resetReturnPeriodSettings() {
+        localStorage.setItem(RETURN_EXCHANGE_SETTINGS_KEY, JSON.stringify({
+            days: DEFAULT_RETURN_EXCHANGE_DAYS,
+            hours: DEFAULT_RETURN_EXCHANGE_HOURS
+        }));
+
+        document.getElementById('returnPeriodDays').value = DEFAULT_RETURN_EXCHANGE_DAYS;
+        document.getElementById('returnPeriodHours').value = DEFAULT_RETURN_EXCHANGE_HOURS;
+        document.getElementById('returnPeriodQuickSelect').value = String(DEFAULT_RETURN_EXCHANGE_DAYS);
+        updateReturnPeriodPreview();
     }
 
     // ============================================
@@ -785,6 +1144,10 @@ if ($businessId <= 0) {
             return;
         }
 
+        if (!ensureReturnExchangeEligible()) {
+            return;
+        }
+
         const items = [];
         const returnItems = [];
         document.querySelectorAll('.js-return-select').forEach(function(box){
@@ -873,6 +1236,10 @@ if ($businessId <= 0) {
     async function submitExchange() {
         if (!returnExchangeState.bill) {
             showMessage('warning', 'Please search and select a bill first.');
+            return;
+        }
+
+        if (!ensureReturnExchangeEligible()) {
             return;
         }
 
@@ -1103,6 +1470,8 @@ if ($businessId <= 0) {
 
         const branch = (bill.branch_name || '-') + (bill.floor_name ? ' / ' + bill.floor_name : '');
         const returnStatus = bill.return_status || 'no_return';
+        const eligibility = getReturnExchangeEligibility(bill);
+        returnExchangeState.eligibility = eligibility;
 
         document.getElementById('billResult').innerHTML =
             '<div class="bill-detail-grid">' +
@@ -1114,9 +1483,12 @@ if ($businessId <= 0) {
                 billInfoBox('Products', '<span class="amount-dark">' + parseInt(items.length || 0, 10) + '</span> items') +
                 billInfoBox('Net Amount', '<span class="amount-dark">' + money.format(toNumber(bill.net_amount)) + '</span>') +
                 billInfoBox('Paid / Due', '<span class="amount-positive">' + money.format(toNumber(bill.paid_amount)) + '</span><div class="mp-sub amount-due">Due ' + money.format(toNumber(bill.balance_amount)) + '</div>') +
+            '</div>' +
+            '<div class="return-policy-note ' + (eligibility.allowed ? '' : 'expired') + '">' +
+                escapeHtml(eligibility.message) +
             '</div>';
 
-        document.getElementById('workArea').classList.remove('d-none');
+        document.getElementById('workArea').classList.toggle('d-none', !eligibility.allowed);
         renderReturnItems();
         renderExchangeItems();
         renderHistory();
@@ -1758,6 +2130,20 @@ if ($businessId <= 0) {
     renderBillSearchHistory();
     loadRecentHistory(true);
     if (window.lucide) window.lucide.createIcons();
+
+    document.getElementById('returnPeriodSettingsBtn')?.addEventListener('click', openReturnPeriodSettings);
+    document.getElementById('saveReturnPeriodBtn')?.addEventListener('click', saveReturnPeriodSettings);
+    document.getElementById('resetReturnPeriodBtn')?.addEventListener('click', resetReturnPeriodSettings);
+    document.getElementById('returnPeriodDays')?.addEventListener('input', updateReturnPeriodPreview);
+    document.getElementById('returnPeriodHours')?.addEventListener('input', updateReturnPeriodPreview);
+    document.getElementById('returnPeriodQuickSelect')?.addEventListener('change', function() {
+        if (this.value !== '') {
+            document.getElementById('returnPeriodDays').value = this.value;
+            document.getElementById('returnPeriodHours').value = 0;
+            updateReturnPeriodPreview();
+        }
+    });
+
 })();
 </script>
 </body>
