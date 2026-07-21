@@ -73,10 +73,161 @@ $controlGroups = [
         ['info_color', 'Info Color'],
     ],
 ];
+$typographyControls = [
+    ['font_family', 'Font Family', 'select'],
+    ['base_font_size', 'Base Font Size', 'number'],
+    ['heading_font_size', 'Heading Font Size', 'number'],
+    ['font_weight', 'Default Font Weight', 'select'],
+    ['heading_font_weight', 'Heading Font Weight', 'select'],
+    ['line_height', 'Line Height', 'number'],
+    ['letter_spacing', 'Letter Spacing', 'number'],
+    ['button_text_transform', 'Button Text Style', 'select'],
+];
+
+$fontFamilyOptions = [
+    'Inter, "Segoe UI", Arial, sans-serif' => 'Inter / Segoe UI',
+    '"Segoe UI", Arial, sans-serif' => 'Segoe UI',
+    'Arial, Helvetica, sans-serif' => 'Arial',
+    'Roboto, Arial, sans-serif' => 'Roboto',
+    'Poppins, Arial, sans-serif' => 'Poppins',
+    'Georgia, "Times New Roman", serif' => 'Georgia',
+];
+
+$fontWeightOptions = [
+    '400' => 'Regular (400)',
+    '500' => 'Medium (500)',
+    '600' => 'Semi Bold (600)',
+    '700' => 'Bold (700)',
+    '800' => 'Extra Bold (800)',
+    '900' => 'Black (900)',
+];
+
+$textTransformOptions = [
+    'none' => 'Normal',
+    'uppercase' => 'UPPERCASE',
+    'capitalize' => 'Capitalize',
+];
+
+$typographyDefaults = [
+    'font_family' => 'Inter, "Segoe UI", Arial, sans-serif',
+    'base_font_size' => '14',
+    'heading_font_size' => '24',
+    'font_weight' => '500',
+    'heading_font_weight' => '800',
+    'line_height' => '1.5',
+    'letter_spacing' => '0',
+    'button_text_transform' => 'none',
+];
+
+$themePresets = [
+    'classic_blue' => [
+        'label' => 'Classic Blue',
+        'colors' => [
+            'body_bg' => '#EEF3FB', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#0F172A',
+            'card_bg' => '#FFFFFF', 'card_header_bg' => '#F8FAFC', 'border_soft' => '#DBE4F0',
+            'text_main' => '#0F172A', 'text_muted' => '#64748B',
+            'sidebar_bg_1' => '#0F172A', 'sidebar_bg_2' => '#1E3A8A', 'sidebar_bg_3' => '#312E81',
+            'sidebar_text' => '#E2E8F0', 'sidebar_active_bg_1' => '#2563EB', 'sidebar_active_bg_2' => '#7C3AED',
+            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#1E293B', 'sidebar_hover_text' => '#FFFFFF',
+            'sidebar_submenu_bg' => '#172033', 'brand_1' => '#2563EB', 'brand_2' => '#7C3AED',
+            'brand_text' => '#FFFFFF', 'table_header_bg' => '#F1F5F9', 'table_header_text' => '#0F172A',
+            'table_row_hover' => '#EFF6FF', 'input_bg' => '#FFFFFF', 'input_border' => '#CBD5E1',
+            'input_text' => '#0F172A', 'success_color' => '#16A34A', 'warning_color' => '#F59E0B',
+            'danger_color' => '#DC2626', 'info_color' => '#0284C7',
+        ],
+        'typography' => ['font_family' => 'Inter, "Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.5', 'letter_spacing' => '0', 'button_text_transform' => 'none']
+    ],
+    'emerald_business' => [
+        'label' => 'Emerald Business',
+        'colors' => [
+            'body_bg' => '#F0FDF4', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#052E16',
+            'card_bg' => '#FFFFFF', 'card_header_bg' => '#ECFDF5', 'border_soft' => '#BBF7D0',
+            'text_main' => '#14532D', 'text_muted' => '#4B7A5D',
+            'sidebar_bg_1' => '#052E16', 'sidebar_bg_2' => '#14532D', 'sidebar_bg_3' => '#166534',
+            'sidebar_text' => '#DCFCE7', 'sidebar_active_bg_1' => '#16A34A', 'sidebar_active_bg_2' => '#059669',
+            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#166534', 'sidebar_hover_text' => '#FFFFFF',
+            'sidebar_submenu_bg' => '#0F3D24', 'brand_1' => '#16A34A', 'brand_2' => '#059669',
+            'brand_text' => '#FFFFFF', 'table_header_bg' => '#DCFCE7', 'table_header_text' => '#14532D',
+            'table_row_hover' => '#F0FDF4', 'input_bg' => '#FFFFFF', 'input_border' => '#86EFAC',
+            'input_text' => '#14532D', 'success_color' => '#15803D', 'warning_color' => '#D97706',
+            'danger_color' => '#B91C1C', 'info_color' => '#0F766E',
+        ],
+        'typography' => ['font_family' => 'Poppins, Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.55', 'letter_spacing' => '0', 'button_text_transform' => 'none']
+    ],
+    'royal_purple' => [
+        'label' => 'Royal Purple',
+        'colors' => [
+            'body_bg' => '#F5F3FF', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#2E1065',
+            'card_bg' => '#FFFFFF', 'card_header_bg' => '#F5F3FF', 'border_soft' => '#DDD6FE',
+            'text_main' => '#2E1065', 'text_muted' => '#6D5A8A',
+            'sidebar_bg_1' => '#2E1065', 'sidebar_bg_2' => '#4C1D95', 'sidebar_bg_3' => '#581C87',
+            'sidebar_text' => '#EDE9FE', 'sidebar_active_bg_1' => '#7C3AED', 'sidebar_active_bg_2' => '#C026D3',
+            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#4C1D95', 'sidebar_hover_text' => '#FFFFFF',
+            'sidebar_submenu_bg' => '#3B176F', 'brand_1' => '#7C3AED', 'brand_2' => '#C026D3',
+            'brand_text' => '#FFFFFF', 'table_header_bg' => '#EDE9FE', 'table_header_text' => '#3B0764',
+            'table_row_hover' => '#FAF5FF', 'input_bg' => '#FFFFFF', 'input_border' => '#C4B5FD',
+            'input_text' => '#2E1065', 'success_color' => '#16A34A', 'warning_color' => '#D97706',
+            'danger_color' => '#DC2626', 'info_color' => '#7C3AED',
+        ],
+        'typography' => ['font_family' => 'Inter, "Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '25', 'font_weight' => '500', 'heading_font_weight' => '900', 'line_height' => '1.5', 'letter_spacing' => '0.1', 'button_text_transform' => 'uppercase']
+    ],
+    'sunset_orange' => [
+        'label' => 'Sunset Orange',
+        'colors' => [
+            'body_bg' => '#FFF7ED', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#431407',
+            'card_bg' => '#FFFFFF', 'card_header_bg' => '#FFF7ED', 'border_soft' => '#FED7AA',
+            'text_main' => '#431407', 'text_muted' => '#8A5A44',
+            'sidebar_bg_1' => '#431407', 'sidebar_bg_2' => '#7C2D12', 'sidebar_bg_3' => '#9A3412',
+            'sidebar_text' => '#FFEDD5', 'sidebar_active_bg_1' => '#EA580C', 'sidebar_active_bg_2' => '#F59E0B',
+            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#7C2D12', 'sidebar_hover_text' => '#FFFFFF',
+            'sidebar_submenu_bg' => '#5A2110', 'brand_1' => '#EA580C', 'brand_2' => '#F59E0B',
+            'brand_text' => '#FFFFFF', 'table_header_bg' => '#FFEDD5', 'table_header_text' => '#7C2D12',
+            'table_row_hover' => '#FFF7ED', 'input_bg' => '#FFFFFF', 'input_border' => '#FDBA74',
+            'input_text' => '#431407', 'success_color' => '#15803D', 'warning_color' => '#EA580C',
+            'danger_color' => '#B91C1C', 'info_color' => '#0284C7',
+        ],
+        'typography' => ['font_family' => '"Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.5', 'letter_spacing' => '0', 'button_text_transform' => 'capitalize']
+    ],
+    'midnight_dark' => [
+        'label' => 'Midnight Dark',
+        'colors' => [
+            'body_bg' => '#020617', 'topbar_bg' => '#0F172A', 'topbar_text' => '#F8FAFC',
+            'card_bg' => '#111827', 'card_header_bg' => '#1E293B', 'border_soft' => '#334155',
+            'text_main' => '#F8FAFC', 'text_muted' => '#94A3B8',
+            'sidebar_bg_1' => '#020617', 'sidebar_bg_2' => '#0F172A', 'sidebar_bg_3' => '#111827',
+            'sidebar_text' => '#CBD5E1', 'sidebar_active_bg_1' => '#2563EB', 'sidebar_active_bg_2' => '#06B6D4',
+            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#1E293B', 'sidebar_hover_text' => '#FFFFFF',
+            'sidebar_submenu_bg' => '#111827', 'brand_1' => '#2563EB', 'brand_2' => '#06B6D4',
+            'brand_text' => '#FFFFFF', 'table_header_bg' => '#1E293B', 'table_header_text' => '#F8FAFC',
+            'table_row_hover' => '#1E293B', 'input_bg' => '#0F172A', 'input_border' => '#475569',
+            'input_text' => '#F8FAFC', 'success_color' => '#22C55E', 'warning_color' => '#F59E0B',
+            'danger_color' => '#EF4444', 'info_color' => '#38BDF8',
+        ],
+        'typography' => ['font_family' => 'Roboto, Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '400', 'heading_font_weight' => '700', 'line_height' => '1.55', 'letter_spacing' => '0', 'button_text_transform' => 'none']
+    ],
+];
+
 global $defaults, $colors;
 ?>
 
 <style>
+.theme-preset-grid{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px}
+.theme-preset-card{border:1px solid var(--border-soft);background:var(--card-bg);border-radius:18px;padding:12px;cursor:pointer;transition:.18s ease;box-shadow:0 6px 18px rgba(15,23,42,.06)}
+.theme-preset-card:hover,.theme-preset-card.active{transform:translateY(-2px);border-color:var(--brand-1);box-shadow:0 14px 28px rgba(15,23,42,.12)}
+.theme-preset-swatches{display:flex;gap:5px;margin-bottom:8px}
+.theme-preset-swatches span{width:24px;height:24px;border-radius:8px;border:1px solid rgba(15,23,42,.12)}
+.theme-preset-name{font-size:12px;font-weight:900;color:var(--text-main)}
+.typography-control-card{border:1px solid var(--border-soft);background:rgba(148,163,184,.06);border-radius:18px;padding:14px;height:100%}
+.typography-control-card label{font-size:12px;font-weight:900;color:var(--text-main);margin-bottom:8px}
+.typography-control-card .form-control,.typography-control-card .form-select{min-height:42px;border-radius:14px}
+.preview-shell,.preview-shell *{font-family:var(--app-font-family,Inter,"Segoe UI",Arial,sans-serif)}
+.preview-shell{font-size:var(--app-font-size,14px);line-height:var(--app-line-height,1.5);letter-spacing:var(--app-letter-spacing,0px)}
+.preview-title{font-size:var(--app-heading-size,24px)!important;font-weight:var(--app-heading-weight,800)!important}
+.preview-content,.preview-nav-item,.preview-topbar{font-weight:var(--app-font-weight,500)}
+.preview-btn{text-transform:var(--app-button-transform,none)}
+@media(max-width:1199px){.theme-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:575px){.theme-preset-grid{grid-template-columns:1fr}}
+
 .color-section-title{font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin:0 0 12px}
 .color-control-card{border:1px solid var(--border-soft);background:rgba(148,163,184,.06);border-radius:18px;padding:14px;height:100%}
 .color-control-card label{font-size:12px;font-weight:900;color:var(--text-main);margin-bottom:8px}
@@ -106,10 +257,32 @@ global $defaults, $colors;
         </div>
         <div class="d-flex gap-2">
             <button type="button" id="resetPreviewBtn" class="btn btn-outline-secondary rounded-4 fw-bold btn-sm px-3">Reset Preview</button>
-            <button type="button" id="savePreviewBtn" class="btn brand-gradient rounded-4 fw-bold btn-sm px-3">Save Colors</button>
+            <button type="button" id="savePreviewBtn" class="btn brand-gradient rounded-4 fw-bold btn-sm px-3">Save All Settings</button>
         </div>
     </div>
 </div>
+
+<section class="card-ui p-3 p-lg-4 mb-3">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="fw-bold fs-6 mb-1">Default Themes</h2>
+            <p class="text-muted-custom small mb-0">Choose a ready-made theme, preview it, then save.</p>
+        </div>
+    </div>
+    <div class="theme-preset-grid" id="themePresetGrid">
+        <?php foreach ($themePresets as $presetKey => $preset): ?>
+            <button type="button" class="theme-preset-card text-start" data-theme-preset="<?= e($presetKey) ?>">
+                <div class="theme-preset-swatches">
+                    <span style="background:<?= e($preset['colors']['brand_1']) ?>"></span>
+                    <span style="background:<?= e($preset['colors']['brand_2']) ?>"></span>
+                    <span style="background:<?= e($preset['colors']['body_bg']) ?>"></span>
+                    <span style="background:<?= e($preset['colors']['sidebar_bg_2']) ?>"></span>
+                </div>
+                <div class="theme-preset-name"><?= e($preset['label']) ?></div>
+            </button>
+        <?php endforeach; ?>
+    </div>
+</section>
 
 <div class="row g-3">
     <div class="col-12 col-xl-8">
@@ -132,6 +305,58 @@ global $defaults, $colors;
                     <?php endforeach; ?>
                 </div>
             <?php endforeach; ?>
+
+            <p class="color-section-title">Typography & Text Controls</p>
+            <div class="row g-3 mb-2">
+                <?php foreach ($typographyControls as [$name, $label, $type]): ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="typography-control-card">
+                            <label for="<?= e($name) ?>"><?= e($label) ?></label>
+
+                            <?php if ($name === 'font_family'): ?>
+                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
+                                    <?php $current = $colors[$name] ?? $typographyDefaults[$name]; ?>
+                                    <?php foreach ($fontFamilyOptions as $value => $optionLabel): ?>
+                                        <option value="<?= e($value) ?>" <?= $current === $value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php elseif ($name === 'font_weight' || $name === 'heading_font_weight'): ?>
+                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
+                                    <?php $current = (string)($colors[$name] ?? $typographyDefaults[$name]); ?>
+                                    <?php foreach ($fontWeightOptions as $value => $optionLabel): ?>
+                                        <option value="<?= e($value) ?>" <?= $current === (string)$value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php elseif ($name === 'button_text_transform'): ?>
+                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
+                                    <?php $current = $colors[$name] ?? $typographyDefaults[$name]; ?>
+                                    <?php foreach ($textTransformOptions as $value => $optionLabel): ?>
+                                        <option value="<?= e($value) ?>" <?= $current === $value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php else: ?>
+                                <?php
+                                $step = in_array($name, ['line_height', 'letter_spacing'], true) ? '0.1' : '1';
+                                $min = $name === 'base_font_size' ? '10' : ($name === 'heading_font_size' ? '14' : ($name === 'line_height' ? '1' : '-2'));
+                                $max = $name === 'base_font_size' ? '24' : ($name === 'heading_font_size' ? '48' : ($name === 'line_height' ? '2.5' : '5'));
+                                ?>
+                                <input type="number" class="form-control live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>"
+                                       value="<?= e($colors[$name] ?? $typographyDefaults[$name]) ?>"
+                                       min="<?= e($min) ?>" max="<?= e($max) ?>" step="<?= e($step) ?>">
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">
+                <button type="button" id="resetTypographyBtn" class="btn btn-outline-secondary rounded-4 fw-bold px-3">
+                    Reset Typography
+                </button>
+                <button type="button" id="saveTypographyBtn" class="btn brand-gradient rounded-4 fw-bold px-4">
+                    Save Typography
+                </button>
+            </div>
         </form>
     </div>
 
@@ -175,6 +400,8 @@ global $defaults, $colors;
 document.addEventListener("DOMContentLoaded", function () {
     const root = document.documentElement;
     const defaults = <?= json_encode($defaults, JSON_UNESCAPED_SLASHES) ?>;
+    const typographyDefaults = <?= json_encode($typographyDefaults, JSON_UNESCAPED_SLASHES) ?>;
+    const themePresets = <?= json_encode($themePresets, JSON_UNESCAPED_SLASHES) ?>;
     const colorMap = {
         body_bg:"--body-bg", topbar_bg:"--topbar-bg", topbar_text:"--topbar-text", card_bg:"--card-bg",
         card_header_bg:"--card-header-bg", border_soft:"--border-soft", text_main:"--text-main", text_muted:"--text-muted",
@@ -186,6 +413,52 @@ document.addEventListener("DOMContentLoaded", function () {
         input_bg:"--input-bg", input_border:"--input-border", input_text:"--input-text",
         success_color:"--success-color", warning_color:"--warning-color", danger_color:"--danger-color", info_color:"--info-color"
     };
+    const typographyMap = {
+        font_family: "--app-font-family",
+        base_font_size: "--app-font-size",
+        heading_font_size: "--app-heading-size",
+        font_weight: "--app-font-weight",
+        heading_font_weight: "--app-heading-weight",
+        line_height: "--app-line-height",
+        letter_spacing: "--app-letter-spacing",
+        button_text_transform: "--app-button-transform"
+    };
+
+    function normalizeTypographyValue(name, value) {
+        value = String(value ?? "").trim();
+        if (name === "base_font_size" || name === "heading_font_size") return value + "px";
+        if (name === "letter_spacing") return value + "px";
+        return value;
+    }
+
+    function applyTypography(name, value) {
+        const variable = typographyMap[name];
+        if (!variable) return;
+        root.style.setProperty(variable, normalizeTypographyValue(name, value));
+    }
+
+    function applyPreset(presetKey) {
+        const preset = themePresets[presetKey];
+        if (!preset) return;
+
+        Object.entries(preset.colors || {}).forEach(([name, value]) => {
+            applyColor(name, value);
+            const color = document.querySelector(`#themeForm input[type="color"][name="${name}"]`);
+            const text = document.querySelector(`[data-color-name="${name}"]`);
+            if (color && isHex(value)) color.value = value;
+            if (text) text.value = value;
+        });
+
+        Object.entries(preset.typography || {}).forEach(([name, value]) => {
+            applyTypography(name, value);
+            const input = document.querySelector(`#themeForm [name="${name}"]`);
+            if (input) input.value = value;
+        });
+
+        document.querySelectorAll("[data-theme-preset]").forEach(btn => btn.classList.remove("active"));
+        document.querySelector(`[data-theme-preset="${presetKey}"]`)?.classList.add("active");
+        showThemeToast("success", "Theme Applied", (preset.label || "Theme") + " preview applied.");
+    }
 
     function applyColor(name, value) {
         const variable = colorMap[name];
@@ -223,6 +496,22 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    document.querySelectorAll("[data-theme-preset]").forEach(button => {
+        button.addEventListener("click", function () {
+            applyPreset(this.dataset.themePreset);
+        });
+    });
+
+    document.querySelectorAll(".live-typography").forEach(input => {
+        input.addEventListener("input", function () {
+            applyTypography(this.name, this.value);
+        });
+        input.addEventListener("change", function () {
+            applyTypography(this.name, this.value);
+        });
+        applyTypography(input.name, input.value);
+    });
+
     document.getElementById("resetPreviewBtn").addEventListener("click", function () {
         Object.keys(defaults).forEach(name => {
             const value = defaults[name];
@@ -232,25 +521,89 @@ document.addEventListener("DOMContentLoaded", function () {
             if (color && isHex(value)) color.value = value;
             if (text) text.value = value;
         });
-        showThemeToast("info", "Preview Reset", "Theme preview reset to default colors.");
+        Object.keys(typographyDefaults).forEach(name => {
+            const value = typographyDefaults[name];
+            applyTypography(name, value);
+            const input = document.querySelector(`#themeForm [name="${name}"]`);
+            if (input) input.value = value;
+        });
+        document.querySelectorAll("[data-theme-preset]").forEach(btn => btn.classList.remove("active"));
+        showThemeToast("info", "Preview Reset", "Theme preview reset to default colors and typography.");
+    });
+
+    async function saveThemeForm(formData, successFallback) {
+        try {
+            const res = await fetch("api/theme-api.php", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                showThemeToast("success", "Saved", data.message || successFallback);
+                return true;
+            }
+
+            showThemeToast("error", "Failed", data.message || "Unable to save theme settings.");
+            return false;
+        } catch (error) {
+            showThemeToast("error", "Failed", "Unable to connect to server.");
+            return false;
+        }
+    }
+
+    document.getElementById("saveTypographyBtn")?.addEventListener("click", async function () {
+        const form = document.getElementById("themeForm");
+        const fd = new FormData();
+
+        const csrfInput = form.querySelector('input[name="csrf_token"], input[name="_token"], input[type="hidden"]');
+        if (csrfInput && csrfInput.name) {
+            fd.append(csrfInput.name, csrfInput.value);
+        }
+
+        document.querySelectorAll("#themeForm .live-typography").forEach(input => {
+            fd.append(input.name, input.value);
+        });
+
+        fd.append("save_scope", "typography");
+
+        const button = this;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Saving...";
+
+        await saveThemeForm(fd, "Typography settings saved successfully.");
+
+        button.disabled = false;
+        button.textContent = originalText;
+    });
+
+    document.getElementById("resetTypographyBtn")?.addEventListener("click", function () {
+        Object.keys(typographyDefaults).forEach(name => {
+            const value = typographyDefaults[name];
+            applyTypography(name, value);
+            const input = document.querySelector(`#themeForm [name="${name}"]`);
+            if (input) input.value = value;
+        });
+
+        showThemeToast("info", "Typography Reset", "Typography preview reset to default values.");
     });
 
     document.getElementById("savePreviewBtn").addEventListener("click", async function () {
         const form = document.getElementById("themeForm");
         const fd = new FormData(form);
+        fd.append("save_scope", "all");
 
-        try {
-            const res = await fetch("api/theme-api.php", { method: "POST", body: fd });
-            const data = await res.json();
+        const button = this;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Saving...";
 
-            if (data.ok) {
-                showThemeToast("success", "Saved", data.message || "Theme colors saved successfully.");
-            } else {
-                showThemeToast("error", "Failed", data.message || "Unable to save colors.");
-            }
-        } catch (error) {
-            showThemeToast("error", "Failed", "Unable to connect to server.");
-        }
+        await saveThemeForm(fd, "Theme colors and typography saved successfully.");
+
+        button.disabled = false;
+        button.textContent = originalText;
     });
 });
 </script>
