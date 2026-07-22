@@ -183,6 +183,13 @@ if ($businessId <= 0) {
                         <?php if ($permissions['can_create']): ?>
                         <button type="button" class="btn brand-gradient" id="addStockBtn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Add Stock Inward</button>
                         <?php endif; ?>
+
+                        <?php if ($permissions['can_create']): ?>
+                        <button type="button" class="btn btn-success" id="bulkImportBtn">
+                            <i data-lucide="upload" style="width:14px;height:14px;"></i> Bulk Import
+                        </button>
+                        <?php endif; ?>
+
                     </div>
                 </div>
             </div>
@@ -228,6 +235,104 @@ if ($businessId <= 0) {
             <?php include __DIR__ . '/includes/footer.php'; ?>
         </section>
     </main>
+</div>
+
+
+
+<!-- Stock Bulk Import Modal -->
+<div class="modal fade" id="bulkImportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <form id="bulkImportForm" enctype="multipart/form-data">
+                <?= stock_inward_csrf_field() ?>
+                <div class="modal-header">
+                    <h5 class="modal-title">Stock Inward Bulk Import</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        Upload Excel/CSV file. Same validation rules as Stock Inward item entry will be applied.
+                    </div>
+
+                    <a href="templates/stock_inward_bulk_template.xlsx" class="btn btn-outline-primary mb-3">
+                        <i data-lucide="download"></i> Download Sample Excel
+                    </a>
+
+                    <div class="row g-3 mb-3">
+
+                        <div class="col-md-4">
+                            <label class="form-label">Branch / Firm <span class="text-danger">*</span></label>
+                            <select name="branch_id" id="bulkBranchId" class="form-select" required>
+                                <option value="">Select Branch / Firm</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Supplier <span class="text-danger">*</span></label>
+                            <select name="supplier_id" id="bulkSupplierId" class="form-select" required>
+                                <option value="">Select Supplier</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Excel / CSV File <span class="text-danger">*</span></label>
+                            <input type="file" name="excel_file" id="bulkExcelFile" class="form-control" accept=".xlsx,.csv" required>
+                        </div>
+
+                    </div>
+
+                    <div id="bulkImportResult" class="mt-3"></div>
+
+                    <hr>
+
+                    <h6 class="fw-bold">Import Options</h6>
+
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Duplicate Article</label>
+                            <select class="form-select" name="duplicate_action">
+                                <option value="allow">Allow Duplicate</option>
+                                <option value="skip">Skip Duplicate</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Barcode Generation</label>
+                            <select class="form-select" name="barcode_mode">
+                                <option value="auto">Auto Generate Barcode</option>
+                                <option value="disable">Without Barcode</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Import Mode</label>
+                            <select class="form-select" name="import_mode">
+                                <option value="preview">Preview Before Save</option>
+                                <option value="direct">Direct Import</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <h6 class="fw-bold">Required Excel Columns</h6>
+                        <small>
+                            Category ID, Brand ID, Article No, Article Name, Size,
+                            Color, Quantity, Purchase Rate, MRP, Discount Type,
+                            Discount Value, Barcode Required
+                        </small>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn brand-gradient">
+                        <i data-lucide="upload"></i> Import Stock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="stockModal" tabindex="-1" aria-hidden="true">
@@ -331,6 +436,20 @@ if ($businessId <= 0) {
                                     <div class="col-6"><label class="form-label">Price Prefix</label><input type="text" id="bdPricePrefix" class="form-control" value="MRP ₹"></div>
                                     <div class="col-6"><label class="form-label">Price Source</label><select id="bdPriceSource" class="form-select"><option value="mrp_rate">MRP</option><option value="selling_rate">Selling</option></select></div>
                                     <div class="col-12"><label class="form-label">Other Details</label><input type="text" id="bdOtherTemplate" class="form-control" value="{brand} | {category} | {color}"></div>
+                                </div>
+                            </div>
+
+                            <div class="barcode-setting-card">
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                    <div class="barcode-setting-title mb-0">Select Product Labels</div>
+                                    <div class="d-flex gap-1">
+                                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2" id="bdSelectAllProducts">All</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" id="bdClearProducts">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="mp-sub mb-2">Only checked products will be included when printing barcode labels.</div>
+                                <div id="bdProductSelectionList" class="bd-product-selection-list">
+                                    <div class="barcode-editor-note">Open a batch to select products.</div>
                                 </div>
                             </div>
 
@@ -478,12 +597,26 @@ if ($businessId <= 0) {
 .barcode-custom-delete{background:#fee2e2;color:#b91c1c}
 .barcode-custom-meta{font-size:9px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+.bd-product-selection-list{display:grid;gap:7px;max-height:210px;overflow:auto;padding-right:2px;scrollbar-width:thin}
+.bd-product-selection-item{display:flex;align-items:flex-start;gap:8px;border:1px solid #dbe4f0;background:#fff;border-radius:10px;padding:8px;cursor:pointer;transition:.16s ease}
+.bd-product-selection-item:hover{border-color:#93c5fd;background:#eff6ff}
+.bd-product-selection-item input{width:16px;height:16px;margin-top:1px;flex:0 0 auto;cursor:pointer}
+.bd-product-selection-name{font-size:10.5px;font-weight:850;color:#0f172a;line-height:1.25}
+.bd-product-selection-meta{font-size:9px;color:#64748b;line-height:1.25;margin-top:2px}
+.bd-label-selector{position:absolute;top:2px;left:2px;z-index:30;width:18px;height:18px;border-radius:5px;background:#fff;border:1px solid #94a3b8;display:grid;place-items:center;box-shadow:0 1px 3px rgba(15,23,42,.18);cursor:pointer}
+.bd-label-selector input{width:13px;height:13px;margin:0;cursor:pointer}
+.bd-label.bd-unselected{opacity:.32;filter:grayscale(1)}
+.bd-label.bd-unselected::before{content:'Not selected';position:absolute;inset:0;z-index:25;display:grid;place-items:center;background:rgba(255,255,255,.58);color:#b91c1c;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;pointer-events:none}
+
 @media(max-width:991px){.barcode-designer-layout{grid-template-columns:1fr;height:auto}.barcode-settings-panel{border-right:0;border-bottom:1px solid #dbe4f0}.barcode-settings-scroll{max-height:45vh}}
 @media print{
  body *{visibility:hidden!important}
  #bdPrintSheet,#bdPrintSheet *{visibility:visible!important}
  #bdPrintSheet{position:absolute;left:0;top:0;box-shadow:none;min-width:0}
- .bd-label{border:0}
+ .bd-label{border:0;opacity:1!important;filter:none!important}
+ .bd-label-selector{display:none!important}
+ .bd-label.bd-unselected{display:none!important}
+ .bd-label.bd-unselected::before{display:none!important}
  .bd-section{border:0!important;background:transparent!important}
  @page{margin:0}
 }
@@ -493,6 +626,88 @@ if ($businessId <= 0) {
 <script>
 (function () {
     'use strict';
+
+
+
+    // Bulk Import
+    const bulkBtn = document.getElementById('bulkImportBtn');
+
+    if (bulkBtn) {
+        bulkBtn.addEventListener('click', function () {
+            const modal = new bootstrap.Modal(document.getElementById('bulkImportModal'));
+            modal.show();
+        });
+    }
+
+    const bulkForm = document.getElementById('bulkImportForm');
+
+    if (bulkForm) {
+
+        bulkForm.addEventListener('submit', async function(e){
+
+            e.preventDefault();
+
+            const fd = new FormData(this);
+
+            fd.append('action','bulk_import_stock_inward');
+
+            const resultBox = document.getElementById('bulkImportResult');
+
+            resultBox.innerHTML = `
+                <div class="alert alert-info">
+                    Importing file please wait...
+                </div>
+            `;
+
+            try {
+
+                const response = await fetch('api/stock-inward-api.php',{
+                    method:'POST',
+                    body:fd,
+                    headers:{
+                        'Accept':'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                resultBox.innerHTML = `
+                    <div class="alert ${data.success ? 'alert-success' : 'alert-danger'}">
+                        ${data.message || 'Import completed'}
+                    </div>
+                `;
+
+                if(data.success){
+
+                    loadBatches();
+
+                    setTimeout(function(){
+
+                        const modal = bootstrap.Modal.getInstance(
+                            document.getElementById('bulkImportModal')
+                        );
+
+                        if(modal){
+                            modal.hide();
+                        }
+
+                    },1000);
+                }
+
+            } catch(error){
+
+                console.error(error);
+
+                resultBox.innerHTML = `
+                    <div class="alert alert-danger">
+                        Server error. Please check API connection.
+                    </div>
+                `;
+            }
+
+        });
+    }
+
 
     const apiUrl = 'api/stock-inward-api.php';
     const permissions = <?= json_encode($permissions) ?>;
@@ -578,6 +793,29 @@ if ($businessId <= 0) {
         document.getElementById('filterCategory').innerHTML = optionHtml(masters.categories, 'category_id', 'category_name', '', 'All');
         document.getElementById('branchId').innerHTML = '<option value="">Select Branch / Firm</option>' + masters.branches.map(b => '<option value="' + b.branch_id + '">' + escapeHtml(branchLabel(b)) + '</option>').join('');
         document.getElementById('supplierId').innerHTML = optionHtml(masters.suppliers, 'supplier_id', 'supplier_name', '', 'Select Supplier');
+
+        // Bulk import branch and supplier dropdowns
+        const bulkBranch = document.getElementById('bulkBranchId');
+        const bulkSupplier = document.getElementById('bulkSupplierId');
+
+        if (bulkBranch) {
+            bulkBranch.innerHTML = '<option value="">Select Branch / Firm</option>' +
+                masters.branches.map(b =>
+                    '<option value="' + b.branch_id + '">' +
+                    escapeHtml(branchLabel(b)) +
+                    '</option>'
+                ).join('');
+        }
+
+        if (bulkSupplier) {
+            bulkSupplier.innerHTML = optionHtml(
+                masters.suppliers,
+                'supplier_id',
+                'supplier_name',
+                '',
+                'Select Supplier'
+            );
+        }
     }
 
     function statusBadge(status) {
@@ -851,6 +1089,7 @@ if ($businessId <= 0) {
     let barcodeDesignerModal = null;
     let bdItems = [];
     let bdLabels = [];
+    let bdSelectedProductKeys = new Set();
 
     const bdPrintPresets = {
         '50x30': { width:50, height:30, columns:3, rows:8 },
@@ -907,6 +1146,131 @@ if ($businessId <= 0) {
         };
     }
 
+    function bdProductKey(item, index = 0) {
+        const stockItemId = parseInt(item.stock_item_id || 0, 10);
+
+        if (stockItemId > 0) {
+            return 'stock-' + stockItemId;
+        }
+
+        return 'item-' + String(item.article_no || item.barcode_value || index)
+            .replace(/[^a-zA-Z0-9_-]/g, '-');
+    }
+
+    function bdResetProductSelection() {
+        bdSelectedProductKeys = new Set(
+            bdItems.map((item, index) => bdProductKey(item, index))
+        );
+        bdRenderProductSelectionList();
+    }
+
+    function bdSelectedItems() {
+        return bdItems.filter((item, index) =>
+            bdSelectedProductKeys.has(bdProductKey(item, index))
+        );
+    }
+
+    function bdRenderProductSelectionList() {
+        const list = document.getElementById('bdProductSelectionList');
+
+        if (!list) {
+            return;
+        }
+
+        if (!bdItems.length) {
+            list.innerHTML = '<div class="barcode-editor-note">No products available.</div>';
+            return;
+        }
+
+        list.innerHTML = bdItems.map((item, index) => {
+            const key = bdProductKey(item, index);
+            const checked = bdSelectedProductKeys.has(key) ? ' checked' : '';
+            const title = item.article_name || item.article_no || 'Product';
+            const details = [
+                item.article_no,
+                item.brand_name,
+                item.category_name,
+                item.size ? 'Size ' + item.size : '',
+                item.color
+            ].filter(Boolean).join(' · ');
+
+            return '<label class="bd-product-selection-item">' +
+                '<input type="checkbox" class="bd-product-select-check" data-product-key="' +
+                    escapeHtml(key) + '"' + checked + '>' +
+                '<span>' +
+                    '<div class="bd-product-selection-name">' + escapeHtml(title) + '</div>' +
+                    '<div class="bd-product-selection-meta">' + escapeHtml(details || item.barcode_value || '-') + '</div>' +
+                '</span>' +
+            '</label>';
+        }).join('');
+    }
+
+    function bdApplyProductSelection() {
+        const selectedItems = bdSelectedItems();
+        const selectedKeys = bdSelectedProductKeys;
+
+        document.querySelectorAll('.bd-product-select-check').forEach(check => {
+            check.checked = selectedKeys.has(check.dataset.productKey || '');
+        });
+
+        document.querySelectorAll('.bd-label[data-product-key]').forEach(label => {
+            const selected = selectedKeys.has(label.dataset.productKey || '');
+            label.classList.toggle('bd-unselected', !selected);
+
+            const checkbox = label.querySelector('.bd-preview-product-check');
+            if (checkbox) {
+                checkbox.checked = selected;
+            }
+        });
+
+        const selectedLabels = bdLabels.filter(entry =>
+            selectedKeys.has(entry.product_key)
+        ).length;
+
+        const columns = Math.max(
+            1,
+            parseInt(document.getElementById('bdColumns').value || 1, 10)
+        );
+        const rows = Math.max(
+            1,
+            parseInt(document.getElementById('bdRows').value || 1, 10)
+        );
+        const startPosition = Math.max(
+            1,
+            parseInt(document.getElementById('bdStartPosition').value || 1, 10)
+        );
+        const occupiedLabels = selectedLabels > 0
+            ? selectedLabels + Math.max(0, startPosition - 1)
+            : 0;
+
+        document.getElementById('bdProductCount').textContent =
+            selectedItems.length + ' / ' + bdItems.length + ' Products';
+
+        document.getElementById('bdLabelCount').textContent =
+            selectedLabels + ' Labels';
+
+        document.getElementById('bdPageCount').textContent =
+            (occupiedLabels > 0
+                ? Math.ceil(occupiedLabels / (columns * rows))
+                : 0
+            ) + ' Pages';
+    }
+
+    function bdSetProductSelected(productKey, selected) {
+        if (!productKey) {
+            return;
+        }
+
+        if (selected) {
+            bdSelectedProductKeys.add(productKey);
+        } else {
+            bdSelectedProductKeys.delete(productKey);
+        }
+
+        bdApplyProductSelection();
+    }
+
+
     function bdShowModal() {
         const m = getBarcodeDesignerModal();
         if (m) m.show();
@@ -920,6 +1284,7 @@ if ($businessId <= 0) {
             return;
         }
         bdItems = ((data.batch && data.batch.items) || []).map(bdNormalize).filter(item => item.available_qty > 0);
+        bdResetProductSelection();
         document.getElementById('bdDefaultQty').value = '1';
         bdShowModal();
     }
@@ -938,6 +1303,7 @@ if ($businessId <= 0) {
             selling_rate: button.dataset.selling,
             available_qty: button.dataset.qty
         })];
+        bdResetProductSelection();
         if (document.getElementById('bdQtyMode').value !== 'custom') {
             document.getElementById('bdDefaultQty').value = '1';
         }
@@ -1030,16 +1396,56 @@ if ($businessId <= 0) {
         ).join('');
     }
 
-    function bdLabelHtml(item, index) {
+    function bdLabelHtml(item, index, productKey, selected) {
         const priceSource = document.getElementById('bdPriceSource').value || 'mrp_rate';
-        return '<article class="bd-label ' + (index === 0 ? 'bd-design' : '') + '">' +
-            '<div class="bd-section bd-company" data-key="company" style="' + bdSectionStyle('company') + '">' + escapeHtml(document.getElementById('bdCompanyName').value || 'GK FOOTWEAR') + '</div>' +
-            '<div class="bd-section bd-product" data-key="product" style="' + bdSectionStyle('product') + '">' + escapeHtml(item.article_name || item.article_no) + '</div>' +
-            '<div class="bd-section bd-barcode" data-key="barcode" style="' + bdSectionStyle('barcode') + '">' + bdBarcodeSvg(item.barcode_value) + '</div>' +
-            '<div class="bd-section bd-number" data-key="number" style="' + bdSectionStyle('number') + '">' + escapeHtml(item.barcode_value) + '</div>' +
-            '<div class="bd-section bd-price" data-key="price" style="' + bdSectionStyle('price') + '">' + escapeHtml(document.getElementById('bdPricePrefix').value || 'MRP ₹') + escapeHtml(bdNum(item[priceSource]).toFixed(2)) + '</div>' +
-            '<div class="bd-section bd-size" data-key="size" style="' + bdSectionStyle('size') + '">Size: ' + escapeHtml(item.size || '-') + '</div>' +
-            '<div class="bd-section bd-other" data-key="other" style="' + bdSectionStyle('other') + '">' + escapeHtml(bdOther(item)) + '</div>' +
+        const selectionClass = selected ? '' : ' bd-unselected';
+
+        return '<article class="bd-label ' +
+            (index === 0 ? 'bd-design' : '') +
+            selectionClass +
+            '" data-product-key="' + escapeHtml(productKey) + '">' +
+
+            '<label class="bd-label-selector" title="Select this product for printing">' +
+                '<input type="checkbox" class="bd-preview-product-check" data-product-key="' +
+                    escapeHtml(productKey) + '"' + (selected ? ' checked' : '') + '>' +
+            '</label>' +
+
+            '<div class="bd-section bd-company" data-key="company" style="' +
+                bdSectionStyle('company') + '">' +
+                escapeHtml(document.getElementById('bdCompanyName').value || 'GK FOOTWEAR') +
+            '</div>' +
+
+            '<div class="bd-section bd-product" data-key="product" style="' +
+                bdSectionStyle('product') + '">' +
+                escapeHtml(item.article_name || item.article_no) +
+            '</div>' +
+
+            '<div class="bd-section bd-barcode" data-key="barcode" style="' +
+                bdSectionStyle('barcode') + '">' +
+                bdBarcodeSvg(item.barcode_value) +
+            '</div>' +
+
+            '<div class="bd-section bd-number" data-key="number" style="' +
+                bdSectionStyle('number') + '">' +
+                escapeHtml(item.barcode_value) +
+            '</div>' +
+
+            '<div class="bd-section bd-price" data-key="price" style="' +
+                bdSectionStyle('price') + '">' +
+                escapeHtml(document.getElementById('bdPricePrefix').value || 'MRP ₹') +
+                escapeHtml(bdNum(item[priceSource]).toFixed(2)) +
+            '</div>' +
+
+            '<div class="bd-section bd-size" data-key="size" style="' +
+                bdSectionStyle('size') + '">' +
+                'Size: ' + escapeHtml(item.size || '-') +
+            '</div>' +
+
+            '<div class="bd-section bd-other" data-key="other" style="' +
+                bdSectionStyle('other') + '">' +
+                escapeHtml(bdOther(item)) +
+            '</div>' +
+
             bdCustomSectionsHtml(item) +
         '</article>';
     }
@@ -1131,8 +1537,11 @@ if ($businessId <= 0) {
         sheet.style.transform = 'scale(' + (printScale / 100) + ')';
 
         bdLabels = [];
+
         bdItems.forEach((item, itemIndex) => {
+            const productKey = bdProductKey(item, itemIndex);
             let copies = 1;
+
             if (qtyMode === 'available') {
                 copies = Math.max(1, parseInt(item.available_qty || 1, 10));
             } else if (qtyMode === 'one') {
@@ -1141,35 +1550,53 @@ if ($businessId <= 0) {
                 copies = repeatProducts || itemIndex === 0 ? customQty : 1;
             }
 
-            for (let i = 0; i < copies; i++) {
-                bdLabels.push(item);
+            for (let copyIndex = 0; copyIndex < copies; copyIndex++) {
+                bdLabels.push({
+                    item: item,
+                    product_key: productKey
+                });
             }
         });
 
-        const placeholders = Array.from({ length: Math.max(0, startPosition - 1) }, () =>
-            '<div class="bd-label bd-placeholder ' +
-            (borderMode === 'solid' ? 'bd-border-solid' : borderMode === 'none' ? 'bd-border-none' : '') +
-            '"></div>'
+        const placeholders = Array.from(
+            { length: Math.max(0, startPosition - 1) },
+            () =>
+                '<div class="bd-label bd-placeholder ' +
+                (borderMode === 'solid'
+                    ? 'bd-border-solid'
+                    : borderMode === 'none'
+                        ? 'bd-border-none'
+                        : '') +
+                '"></div>'
         ).join('');
 
-        const labelHtml = bdLabels.map(item => {
-            let html = bdLabelHtml(item);
+        const labelHtml = bdLabels.map((entry, index) => {
+            const selected = bdSelectedProductKeys.has(entry.product_key);
+            let html = bdLabelHtml(
+                entry.item,
+                index,
+                entry.product_key,
+                selected
+            );
+
             const borderClass = borderMode === 'solid'
                 ? 'bd-border-solid'
                 : borderMode === 'none'
                     ? 'bd-border-none'
                     : '';
-            return html.replace('class="bd-label', 'class="bd-label ' + borderClass);
+
+            return html.replace(
+                'class="bd-label',
+                'class="bd-label ' + borderClass
+            );
         }).join('');
 
         sheet.innerHTML = bdLabels.length
             ? placeholders + labelHtml
             : '<div class="text-center text-muted py-5">No barcode labels available.</div>';
 
-        const occupiedLabels = bdLabels.length + Math.max(0, startPosition - 1);
-        document.getElementById('bdProductCount').textContent = bdItems.length + ' Products';
-        document.getElementById('bdLabelCount').textContent = bdLabels.length + ' Labels';
-        document.getElementById('bdPageCount').textContent = Math.max(1, Math.ceil(occupiedLabels / (columns * rows))) + ' Pages';
+        bdRenderProductSelectionList();
+        bdApplyProductSelection();
 
         document.querySelectorAll('.bd-label.bd-design .bd-section').forEach(section => {
             section.addEventListener('click', function (event) {
@@ -1178,7 +1605,9 @@ if ($businessId <= 0) {
             });
         });
 
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
     }
 
     function bdSelectSection(key) {
@@ -1269,9 +1698,68 @@ if ($businessId <= 0) {
         bdRenderLabels();
     });
 
-    document.getElementById('bdGenerateLabels').addEventListener('click', bdRenderLabels);
+    document.getElementById('bdProductSelectionList').addEventListener('change', function (event) {
+        const checkbox = event.target.closest('.bd-product-select-check');
+
+        if (!checkbox) {
+            return;
+        }
+
+        bdSetProductSelected(
+            checkbox.dataset.productKey || '',
+            checkbox.checked
+        );
+    });
+
+    document.getElementById('bdPrintSheet').addEventListener('change', function (event) {
+        const checkbox = event.target.closest('.bd-preview-product-check');
+
+        if (!checkbox) {
+            return;
+        }
+
+        bdSetProductSelected(
+            checkbox.dataset.productKey || '',
+            checkbox.checked
+        );
+    });
+
+    document.getElementById('bdSelectAllProducts').addEventListener('click', function () {
+        bdSelectedProductKeys = new Set(
+            bdItems.map((item, index) => bdProductKey(item, index))
+        );
+        bdApplyProductSelection();
+    });
+
+    document.getElementById('bdClearProducts').addEventListener('click', function () {
+        bdSelectedProductKeys.clear();
+        bdApplyProductSelection();
+    });
+
+    document.getElementById('bdGenerateLabels').addEventListener('click', function () {
+        bdRenderLabels();
+
+        if (!bdSelectedItems().length) {
+            showToast('warning', 'Please select at least one product label.');
+        }
+    });
+
     document.getElementById('bdPrintLabels').addEventListener('click', function () {
-        document.querySelectorAll('.bd-section').forEach(el => el.classList.remove('selected'));
+        bdApplyProductSelection();
+
+        const selectedLabelCount = bdLabels.filter(entry =>
+            bdSelectedProductKeys.has(entry.product_key)
+        ).length;
+
+        if (selectedLabelCount <= 0) {
+            showToast('warning', 'Please select at least one product label before printing.');
+            return;
+        }
+
+        document.querySelectorAll('.bd-section').forEach(el =>
+            el.classList.remove('selected')
+        );
+
         window.print();
     });
     document.getElementById('bdResetLayout').addEventListener('click', function () {

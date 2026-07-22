@@ -16,6 +16,11 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/permissions.php';
 require_once __DIR__ . '/../includes/csrf.php';
 
+// PhpSpreadsheet support for Excel bulk import (.xlsx/.xls)
+require_once __DIR__ . '/../../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
 if (function_exists('require_business_login')) {
     require_business_login();
 }
@@ -1362,6 +1367,253 @@ function si_cancel_stock_inward(mysqli $conn, int $businessId, array $allowedBra
     }
 }
 
+
+/**
+ * Bulk import stock inward from CSV.
+ * Uses same validation and save flow as manual stock inward.
+ */
+
+function si_read_bulk_import_file(string $file): array
+{
+    $extension = strtolower(pathinfo($_FILES['excel_file']['name'] ?? '', PATHINFO_EXTENSION));
+
+    $rows = [];
+
+    if ($extension === 'xlsx' || $extension === 'xls') {
+
+        $autoload = __DIR__ . '/../../vendor/autoload.php';
+
+        if (!file_exists($autoload)) {
+            throw new RuntimeException('Excel support requires PhpSpreadsheet. Please install phpoffice/phpspreadsheet.');
+        }
+
+        require_once $autoload;
+
+        if (!class_exists('\PhpOffice\PhpSpreadsheet\IOFactory')) {
+            throw new RuntimeException('PhpSpreadsheet library not found.');
+        }
+
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $rows = $sheet->toArray(null, true, true, true);
+
+        foreach ($rows as $key => $row) {
+            $rows[$key] = array_values($row);
+        }
+
+    } else {
+
+        $handle = fopen($file, 'r');
+
+        if (!$handle) {
+            throw new RuntimeException('Unable to read import file.');
+        }
+
+        while (($row = fgetcsv($handle, 0, ',')) !== false) {
+            $rows[] = $row;
+        }
+
+        fclose($handle);
+    }
+
+    return $rows;
+}
+
+
+function si_bulk_import(mysqli $conn, int $businessId, array $allowedBranchIds, array $permissions): array
+{
+    if (!$permissions['can_create']) {
+        throw new RuntimeException('You do not have permission to create stock inward.');
+    }
+
+    if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Excel/CSV file missing.');
+    }
+
+    $duplicateAction = (string)($_POST['duplicate_action'] ?? 'allow');
+
+    $file = $_FILES['excel_file']['tmp_name'];
+
+    $rows = si_read_bulk_import_file($file);
+
+    $items = [];
+    $rowNo = 1;
+
+    foreach ($rows as $row) {
+
+        if ($rowNo === 1) {
+            $rowNo++;
+            continue;
+        }
+
+        if (count($row) < 12) {
+            throw new RuntimeException("Row {$rowNo} has invalid columns.");
+        }
+
+        $articleNo = trim((string)$row[2]);
+
+        if ($duplicateAction === 'skip') {
+            $exists = si_one(
+                $conn,
+                "SELECT stock_item_id FROM stock_inward_items 
+                 WHERE business_id=? AND article_no=? LIMIT 1",
+                'is',
+                [$businessId, $articleNo]
+            );
+
+            if ($exists) {
+                $rowNo++;
+                continue;
+            }
+        }
+
+        // Support both ID and Name based import
+        $categoryValue = trim((string)$row[0]);
+        $brandValue = trim((string)$row[1]);
+
+        $categoryId = (int)$categoryValue;
+        $brandId = (int)$brandValue;
+
+        // Category: accept ID or Name (case insensitive)
+        if ($categoryValue !== '') {
+
+            $catCheck = si_one(
+                $conn,
+                "SELECT category_id FROM categories
+                 WHERE business_id=? AND category_id=? AND status=1 LIMIT 1",
+                'ii',
+                [$businessId, $categoryId]
+            );
+
+            if (!$catCheck) {
+                $cat = si_one(
+                    $conn,
+                    "SELECT category_id FROM categories
+                     WHERE business_id=?
+                     AND LOWER(TRIM(category_name)) = LOWER(TRIM(?))
+                     AND status=1 LIMIT 1",
+                    'is',
+                    [$businessId, $categoryValue]
+                );
+                $categoryId = (int)($cat['category_id'] ?? 0);
+            }
+        }
+
+        // Brand: accept ID or Name (business wise)
+        $brandId = 0;
+
+        if ($brandValue !== '') {
+
+            // 1. Try brand_id for current business
+            if (ctype_digit($brandValue)) {
+
+                $brandCheck = si_one(
+                    $conn,
+                    "SELECT brand_id FROM brands
+                     WHERE business_id=?
+                     AND brand_id=?
+                     AND status=1
+                     LIMIT 1",
+                    'ii',
+                    [$businessId, (int)$brandValue]
+                );
+
+                if ($brandCheck) {
+                    $brandId = (int)$brandCheck['brand_id'];
+                }
+            }
+
+
+            // 2. Try brand name for current business
+            if ($brandId <= 0) {
+
+                $brand = si_one(
+                    $conn,
+                    "SELECT brand_id FROM brands
+                     WHERE business_id=?
+                     AND LOWER(TRIM(brand_name)) = LOWER(TRIM(?))
+                     AND status=1
+                     LIMIT 1",
+                    'is',
+                    [$businessId, $brandValue]
+                );
+
+                if ($brand) {
+                    $brandId = (int)$brand['brand_id'];
+                }
+            }
+        }
+
+
+        if ($brandId <= 0) {
+            throw new RuntimeException(
+                "Row {$rowNo}: Brand '{$brandValue}' not found for this business"
+            );
+        }
+
+        $items[] = [
+            'category_id' => $categoryId,
+            'brand_id' => $brandId,
+            'article_no' => $articleNo,
+            'article_name' => trim((string)$row[3]),
+            'size' => trim((string)$row[4]),
+            'color' => trim((string)$row[5]),
+            'qty' => (float)$row[6],
+            'purchase_rate' => (float)$row[7],
+            'mrp_rate' => (float)$row[8],
+            'product_discount_type' => trim((string)$row[9]) ?: 'none',
+            'product_discount_value' => (float)$row[10],
+            'barcode_required' => ((int)$row[11] === 1 ? 1 : 0),
+        ];
+
+        $rowNo++;
+    }
+
+    if (!$items) {
+        throw new RuntimeException('No valid import rows found.');
+    }
+
+    // Bulk import branch and supplier selection
+    // Values are received from bulk import modal
+
+    $branchId = (int)($_POST['branch_id'] ?? 0);
+    $supplierId = (int)($_POST['supplier_id'] ?? 0);
+
+    if ($branchId <= 0) {
+        throw new RuntimeException('Please select branch before bulk import.');
+    }
+
+    if ($supplierId <= 0) {
+        throw new RuntimeException('Please select supplier before bulk import.');
+    }
+
+    si_require_branch_access($allowedBranchIds, $branchId);
+
+    si_check_supplier($conn, $businessId, $supplierId);
+
+    $_POST['branch_id'] = $branchId;
+    $_POST['supplier_id'] = $supplierId;
+
+    $_POST['items_json'] = json_encode($items);
+
+    $result = si_save_stock_inward(
+        $conn,
+        $businessId,
+        $allowedBranchIds,
+        $permissions
+    );
+
+    return [
+        'imported_rows' => count($items),
+        'batch_id' => $result['batch_id'],
+        'batch_no' => $result['batch_no'],
+        'purchase_total_value' => $result['purchase_total_value']
+    ];
+}
+
+
 function si_masters(mysqli $conn, int $businessId, array $allowedBranchIds): array
 {
     $branchRows = [];
@@ -1655,6 +1907,22 @@ try {
     if ($method === 'POST') {
         si_verify_csrf_token();
         $action = (string)($_POST['action'] ?? '');
+
+
+        if ($action === 'bulk_import_stock_inward') {
+            $result = si_bulk_import(
+                $conn,
+                $businessId,
+                $allowedBranchIds,
+                $permissions
+            );
+
+            si_json([
+                'success' => true,
+                'message' => 'Stock inward bulk import completed successfully.',
+                'data' => $result,
+            ]);
+        }
 
         if ($action === 'save_stock_inward') {
             $result = si_save_stock_inward($conn, $businessId, $allowedBranchIds, $permissions);

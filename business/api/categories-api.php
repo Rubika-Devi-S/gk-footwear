@@ -22,16 +22,20 @@ $hasUpdatedAt = table_has_column($conn, 'categories', 'updated_at');
 function category_api_permissions(mysqli $conn): array
 {
     if (is_business_admin($conn)) {
-        return ['can_view' => true, 'can_create' => true, 'can_edit' => true, 'can_delete' => true, 'can_print' => true,
-            'can_export' => true];
+        return [
+            'can_view' => true, 'can_create' => true, 'can_edit' => true,
+            'can_delete' => true, 'can_print' => true, 'can_export' => true
+        ];
     }
 
     $businessId = current_business_id();
     $roleId = current_role_id();
-
     $cols = ['can_view'];
+
     foreach (['can_create', 'can_edit', 'can_delete', 'can_print', 'can_export'] as $col) {
-        $cols[] = table_has_column($conn, 'business_role_sidebar_access', $col) ? $col : '0 AS ' . $col;
+        $cols[] = table_has_column($conn, 'business_role_sidebar_access', $col)
+            ? $col
+            : '0 AS ' . $col;
     }
 
     $stmt = mysqli_prepare($conn, "
@@ -52,8 +56,10 @@ function category_api_permissions(mysqli $conn): array
     mysqli_stmt_close($stmt);
 
     if (!$row) {
-        return ['can_view' => false, 'can_create' => false, 'can_edit' => false, 'can_delete' => false, 'can_print' => false,
-            'can_export' => false];
+        return [
+            'can_view' => false, 'can_create' => false, 'can_edit' => false,
+            'can_delete' => false, 'can_print' => false, 'can_export' => false
+        ];
     }
 
     return [
@@ -69,10 +75,18 @@ function category_api_permissions(mysqli $conn): array
 function category_name_exists(mysqli $conn, int $businessId, string $categoryName, ?int $excludeCategoryId = null): bool
 {
     if ($excludeCategoryId) {
-        $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM categories WHERE business_id = ? AND category_name = ? AND category_id <> ?");
+        $stmt = mysqli_prepare($conn, "
+            SELECT COUNT(*) AS total
+            FROM categories
+            WHERE business_id = ? AND category_name = ? AND category_id <> ?
+        ");
         mysqli_stmt_bind_param($stmt, 'isi', $businessId, $categoryName, $excludeCategoryId);
     } else {
-        $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM categories WHERE business_id = ? AND category_name = ?");
+        $stmt = mysqli_prepare($conn, "
+            SELECT COUNT(*) AS total
+            FROM categories
+            WHERE business_id = ? AND category_name = ?
+        ");
         mysqli_stmt_bind_param($stmt, 'is', $businessId, $categoryName);
     }
 
@@ -85,17 +99,17 @@ function category_name_exists(mysqli $conn, int $businessId, string $categoryNam
 
 function category_has_dependency(mysqli $conn, int $businessId, int $categoryId): bool
 {
-    $checks = [];
-
-    foreach (['brands', 'products', 'stock_inward_items'] as $table) {
-        if (table_exists($conn, $table) && table_has_column($conn, $table, 'category_id')) {
-            $checks[] = $table;
+    foreach (['products', 'stock_inward_items', 'brand_category_map'] as $table) {
+        if (!table_exists($conn, $table) || !table_has_column($conn, $table, 'category_id')) {
+            continue;
         }
-    }
 
-    foreach ($checks as $table) {
-        $safe = str_replace('`', '', $table);
-        $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS total FROM `{$safe}` WHERE business_id = ? AND category_id = ?");
+        $safeTable = str_replace('`', '', $table);
+        $stmt = mysqli_prepare($conn, "
+            SELECT COUNT(*) AS total
+            FROM `{$safeTable}`
+            WHERE business_id = ? AND category_id = ?
+        ");
         mysqli_stmt_bind_param($stmt, 'ii', $businessId, $categoryId);
         mysqli_stmt_execute($stmt);
         $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
@@ -122,8 +136,15 @@ try {
         }
 
         $categoryId = (int)($_POST['category_id'] ?? 0);
+        if ($categoryId <= 0) {
+            throw new RuntimeException('Invalid category selected.');
+        }
 
-        $stmt = mysqli_prepare($conn, "UPDATE categories SET status = IF(status = 1, 0, 1) WHERE business_id = ? AND category_id = ?");
+        $stmt = mysqli_prepare($conn, "
+            UPDATE categories
+            SET status = IF(status = 1, 0, 1)
+            WHERE business_id = ? AND category_id = ?
+        ");
         mysqli_stmt_bind_param($stmt, 'ii', $businessId, $categoryId);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
@@ -139,16 +160,18 @@ try {
         }
 
         $categoryId = (int)($_POST['category_id'] ?? 0);
-
         if ($categoryId <= 0) {
             throw new RuntimeException('Invalid category selected.');
         }
 
         if (category_has_dependency($conn, $businessId, $categoryId)) {
-            throw new RuntimeException('This category is already used. Deactivate it instead of deleting.');
+            throw new RuntimeException('This category is already used or has mapped brands. Remove the mappings or deactivate it instead.');
         }
 
-        $stmt = mysqli_prepare($conn, "DELETE FROM categories WHERE business_id = ? AND category_id = ?");
+        $stmt = mysqli_prepare($conn, "
+            DELETE FROM categories
+            WHERE business_id = ? AND category_id = ?
+        ");
         mysqli_stmt_bind_param($stmt, 'ii', $businessId, $categoryId);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
@@ -187,7 +210,8 @@ try {
             $values[] = $status;
         }
 
-        $sql = "INSERT INTO categories (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+        $sql = "INSERT INTO categories (" . implode(',', $columns) . ")
+                VALUES (" . implode(',', $placeholders) . ")";
         $stmt = mysqli_prepare($conn, $sql);
         mysqli_stmt_bind_param($stmt, $types, ...$values);
         mysqli_stmt_execute($stmt);
@@ -230,7 +254,9 @@ try {
         $values[] = $businessId;
         $values[] = $categoryId;
 
-        $sql = "UPDATE categories SET " . implode(', ', $sets) . " WHERE business_id = ? AND category_id = ?";
+        $sql = "UPDATE categories
+                SET " . implode(', ', $sets) . "
+                WHERE business_id = ? AND category_id = ?";
         $stmt = mysqli_prepare($conn, $sql);
         mysqli_stmt_bind_param($stmt, $types, ...$values);
         mysqli_stmt_execute($stmt);

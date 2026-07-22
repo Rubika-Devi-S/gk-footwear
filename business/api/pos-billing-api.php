@@ -373,6 +373,41 @@ function pos_api_get_branch_display_name(mysqli $conn, $branchId, $businessId)
     return '';
 }
 
+
+/** Name-only registered customer search for Create Bill. */
+function pos_api_search_customers_enhanced(mysqli $conn, $businessId, array $params)
+{
+    $businessId=(int)$businessId; $branchId=pos_api_branch_id($params);
+    $query=trim((string)($params['q']??$params['search']??$params['term']??''));
+    $limit=max(1,min(20,(int)($params['limit']??10)));
+    if ($businessId<=0) return array('success'=>false,'message'=>'Business session missing.');
+    $where="c.business_id = ? AND c.status = 1"; $types='i'; $bind=array($businessId);
+    if ($query!=='') { $where.=" AND c.customer_name LIKE ?"; $types.='s'; $bind[]='%'.$query.'%'; }
+    $branchJoin='';
+    if ($branchId>0) { $branchJoin=' AND b.branch_id = ?'; $types='i'.$types; array_unshift($bind,$branchId); }
+    $sql="SELECT c.customer_id,c.customer_name,c.mobile,c.email,c.address,c.gstin,c.opening_outstanding,c.loyalty_points,'registered' AS customer_type,COUNT(b.bill_id) AS total_bills,COUNT(b.bill_id) AS purchase_count,MAX(b.bill_date) AS last_purchase_date,COALESCE(SUM(b.net_amount),0) AS total_purchase_amount,COALESCE(c.opening_outstanding,0)+COALESCE(SUM(CASE WHEN b.bill_status='active' AND b.balance_amount>0 THEN b.balance_amount ELSE 0 END),0) AS outstanding_balance FROM customers c LEFT JOIN bills b ON b.business_id=c.business_id AND b.customer_id=c.customer_id AND b.bill_status='active' {$branchJoin} WHERE {$where} GROUP BY c.customer_id,c.customer_name,c.mobile,c.email,c.address,c.gstin,c.opening_outstanding,c.loyalty_points ORDER BY CASE WHEN ?<>'' AND LOWER(c.customer_name)=LOWER(?) THEN 0 ELSE 1 END,c.customer_name ASC LIMIT {$limit}";
+    $types.='ss'; $bind[]=$query; $bind[]=$query;
+    $stmt=mysqli_prepare($conn,$sql); if(!$stmt) return array('success'=>false,'message'=>'Customer search query error: '.mysqli_error($conn));
+    pos_api_bind_params($stmt,$types,$bind); $customers=pos_api_fetch_all($stmt); $exact=null;
+    foreach($customers as &$row){$row['customer_id']=(int)$row['customer_id'];$row['total_bills']=(int)$row['total_bills'];$row['purchase_count']=(int)$row['purchase_count'];$row['total_purchase_amount']=(float)$row['total_purchase_amount'];$row['outstanding_balance']=(float)$row['outstanding_balance'];$row['loyalty_points']=(float)$row['loyalty_points'];$row['is_walkin_customer']=0;if($query!==''&&strcasecmp(trim((string)$row['customer_name']),$query)===0)$exact=$row;} unset($row);
+    return array('success'=>true,'customers'=>$customers,'registered_customers'=>$customers,'walkin_customers'=>array(),'exact_customer'=>$exact,'exact_walkin'=>null,'query_type'=>'name');
+}
+
+
+function pos_api_thermal_print_success($httpCode, $responseText)
+{
+    $httpCode=(int)$httpCode; $text=trim((string)$responseText); $upper=strtoupper($text);
+    if (strpos($upper,'ERROR')!==false || strpos($upper,'FAIL')!==false || strpos($upper,'EXCEPTION')!==false) return false;
+    $json=json_decode($text,true);
+    if (is_array($json)) {
+        if (!empty($json['success']) || !empty($json['printed']) || strtolower((string)($json['status']??''))==='success') return true;
+        $nested=strtoupper(trim((string)($json['print_response']??($json['data']['print_response']??''))));
+        if (strpos($nested,'PRINT_SUCCESS')!==false || strpos($nested,'PRINT SUCCESS')!==false || strpos($nested,'PRINTED')!==false || $nested==='OK') return true;
+    }
+    if (strpos($upper,'PRINT_SUCCESS')!==false || strpos($upper,'PRINT SUCCESS')!==false || strpos($upper,'PRINTED')!==false || $upper==='OK') return true;
+    return $httpCode>=200 && $httpCode<300;
+}
+
 // ============================================
 // MAIN API HANDLER
 // ============================================
@@ -496,28 +531,26 @@ try {
 
                 // Send data to local .NET Thermal Print Service
                 try {
-                    $ch = curl_init();
-                    curl_setopt($ch, CURLOPT_URL, "http://127.0.0.1:17900/");
-                    curl_setopt($ch, CURLOPT_POST, true);
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($printData));
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: application/json"));
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-
-                    $printResponse = curl_exec($ch);
-
-                    if(curl_errno($ch))
-                    {
-                        $result['thermal_print'] = "Printer Error : ".curl_error($ch);
-                    }
-                    else
-                    {
-                        $result['thermal_print'] = $printResponse;
-                    }
-
-                    curl_close($ch);
-                } catch (Exception $e) {
-                    $result['thermal_print'] = "Print Service Error: " . $e->getMessage();
+                    $ch=curl_init();
+                    curl_setopt_array($ch,array(
+                        CURLOPT_URL=>"http://127.0.0.1:17900/", CURLOPT_POST=>true,
+                        CURLOPT_POSTFIELDS=>json_encode($printData,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
+                        CURLOPT_HTTPHEADER=>array("Content-Type: application/json","Accept: application/json, text/plain, */*","X-Print-Job-Id: GK-BILL-".(int)$savedBillId."-".time()),
+                        CURLOPT_RETURNTRANSFER=>true, CURLOPT_CONNECTTIMEOUT_MS=>1500,
+                        CURLOPT_TIMEOUT_MS=>5000, CURLOPT_FAILONERROR=>false
+                    ));
+                    $printResponse=curl_exec($ch); $curlErrno=curl_errno($ch); $curlError=curl_error($ch);
+                    $httpCode=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
+                    $printSuccess=false;
+                    if ($curlErrno===0) $printSuccess=pos_api_thermal_print_success($httpCode,$printResponse);
+                    $message=$curlErrno!==0 ? ('Printer Error: '.$curlError) : ($printSuccess ? 'Bill printed successfully.' : (trim((string)$printResponse)!==''?trim((string)$printResponse):'The thermal print service did not confirm printing.'));
+                    $result['thermal_print']=(string)$printResponse;
+                    $result['thermal_print_success']=$printSuccess;
+                    $result['thermal_print_result']=array('attempted'=>true,'success'=>$printSuccess,'printed'=>$printSuccess,'status'=>$printSuccess?'success':'failed','http_code'=>$httpCode,'response'=>(string)$printResponse,'message'=>$message);
+                } catch (Throwable $e) {
+                    $result['thermal_print']='Print Service Error: '.$e->getMessage();
+                    $result['thermal_print_success']=false;
+                    $result['thermal_print_result']=array('attempted'=>true,'success'=>false,'printed'=>false,'status'=>'failed','http_code'=>0,'response'=>'','message'=>$e->getMessage());
                 }
             }
 
@@ -553,7 +586,7 @@ try {
             pos_api_json($controller->scan($_GET)); 
         }
         elseif ($action === 'search_customers') { 
-            pos_api_json($controller->searchCustomers($_GET)); 
+            pos_api_json(pos_api_search_customers_enhanced($conn, $businessId, $_GET)); 
         }
         elseif ($action === 'resume_workflow' || $action === 'resume_hold') { 
             pos_api_json($controller->resumeWorkflow($_GET)); 

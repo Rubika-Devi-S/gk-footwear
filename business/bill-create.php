@@ -87,6 +87,97 @@ if ($businessId <= 0) {
         .pos-field-chip select, .pos-field-chip input { border: 0; outline: 0; background: transparent; padding: 0; font-size: 12px; color: var(--pos-text); font-weight: 900; width: 100%; }
         .pos-customer-bar { min-height: 45px; display: flex; gap: 8px; align-items: center; border: 1px solid var(--pos-border); background: #f8fafc; border-radius: 15px; padding: 5px 7px 5px 10px; position: relative; min-width: 0; }
         .pos-customer-bar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 12px; font-weight: 850; color: var(--pos-text); }
+        .customer-search-grid { display:grid; gap:7px; position:relative; }
+        .customer-search-top { display:flex; align-items:center; gap:7px; min-width:0; }
+        .customer-search-top .pos-customer-bar { flex:1; min-width:0; }
+        .customer-unified-search { min-height:45px; }
+        .customer-unified-search #customerSearch { width:100%; }
+        .customer-field-icon { width:18px; height:18px; color:var(--pos-muted); flex:0 0 auto; }
+        .customer-mobile-box { min-height:40px; display:flex; align-items:center; gap:8px; border:1px solid var(--pos-border); background:#f8fafc; border-radius:14px; padding:5px 10px; }
+        .customer-mobile-box input { width:100%; min-width:0; border:0; outline:0; background:transparent; color:var(--pos-text); font-size:12px; font-weight:850; }
+        .customer-status-row { min-height:28px; display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+        .customer-status-badge { display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:4px 9px; border-radius:999px; font-size:9.5px; font-weight:950; white-space:nowrap; border:1px solid transparent; }
+        .customer-status-badge.registered { color:#166534; background:#dcfce7; border-color:#86efac; }
+        .customer-status-badge.walkin { color:#9a3412; background:#ffedd5; border-color:#fdba74; }
+        .customer-status-badge.previous { color:#92400e; background:#fef3c7; border-color:#fcd34d; }
+        .customer-purchase-info { color:var(--pos-muted); font-size:9.5px; font-weight:850; line-height:1.35; }
+        .customer-purchase-info strong { color:var(--pos-text); }
+        .customer-suggestion-type { display:inline-flex; align-items:center; padding:3px 7px; border-radius:999px; font-size:8.5px; font-weight:950; margin-left:auto; }
+        .customer-suggestion-type.registered { color:#166534; background:#dcfce7; }
+        .customer-suggestion-type.walkin { color:#9a3412; background:#ffedd5; }
+        .customer-suggestion-purchases { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px 8px; color:#475569; font-size:9px; }
+        .customer-search-loading { opacity:.65; pointer-events:none; }
+
+        /* Customer dropdown: provide enough width and show full customer names */
+        #customerSuggestions {
+            left: 0 !important;
+            right: auto !important;
+            width: clamp(360px, 31vw, 480px) !important;
+            min-width: 360px !important;
+            max-width: min(480px, calc(100vw - 32px)) !important;
+        }
+
+        #customerSuggestions .suggestion-item {
+            align-items: flex-start;
+            min-height: 72px;
+        }
+
+        #customerSuggestions .suggestion-content {
+            min-width: 0;
+            overflow: visible;
+        }
+
+        #customerSuggestions .customer-suggestion-heading {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: start;
+            gap: 8px;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #customerSuggestions .suggestion-name {
+            display: block;
+            min-width: 0;
+            max-width: none;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            line-height: 1.3;
+        }
+
+        #customerSuggestions .customer-suggestion-type {
+            margin-left: 0;
+            flex: 0 0 auto;
+            align-self: start;
+        }
+
+        #customerSuggestions .suggestion-meta,
+        #customerSuggestions .customer-suggestion-purchases {
+            width: 100%;
+        }
+
+        #customerSuggestions .suggestion-meta span,
+        #customerSuggestions .customer-suggestion-purchases span {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 575px) {
+            #customerSuggestions {
+                position: fixed !important;
+                left: 16px !important;
+                right: 16px !important;
+                top: 138px !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                max-height: calc(100vh - 170px);
+            }
+        }
+        .dark-pos .customer-mobile-box { background:#111827; }
         .pos-icon-btn { border: 0; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 12px; background: #e2e8f0; color: #0f172a; display: grid; place-items: center; }
         .pos-icon-btn.primary { color: #fff; background: linear-gradient(135deg, var(--pos-brand-1), var(--pos-brand-2)); }
         .pos-icon-btn.danger { color: #b91c1c; background: #fee2e2; }
@@ -1137,15 +1228,24 @@ if ($businessId <= 0) {
                         <div class="compact-card compact-customer-card">
                             <div class="compact-card-title">
                                 <span>Customer</span>
-                                <span class="compact-card-sub">Inside product selection</span>
+                                <span class="compact-card-sub">Name or mobile search</span>
                             </div>
-                            <div class="pos-customer-bar">
-                                <input type="text" id="customerSearch" placeholder="Walk-in / Search or type customer">
-                                <button type="button" class="pos-icon-btn" id="walkInBtn" title="Walk-in customer"><i data-lucide="user"></i></button>
-                                <button type="button" class="pos-icon-btn primary" id="addCustomerBtn" title="Add customer"><i data-lucide="user-plus"></i></button>
-                                <div class="suggestion-list" id="customerSuggestions"></div>
+                            <div class="customer-search-grid" id="customerSearchGrid">
+                                <div class="customer-search-top">
+                                    <div class="pos-customer-bar customer-unified-search">
+                                        <i data-lucide="user-search" class="customer-field-icon"></i>
+                                        <input type="text" id="customerSearch" autocomplete="off" inputmode="search" placeholder="Search customer name">
+                                        <div class="suggestion-list" id="customerSuggestions"></div>
+                                    </div>
+                                    <button type="button" class="pos-icon-btn" id="walkInBtn" title="Use Walk-in Customer"><i data-lucide="user"></i></button>
+                                    <button type="button" class="pos-icon-btn primary" id="addCustomerBtn" title="Enter customer details"><i data-lucide="user-plus"></i></button>
+                                </div>
+                                <div class="customer-status-row">
+                                    <span class="customer-status-badge walkin" id="customerStatusBadge"><i data-lucide="shopping-bag"></i> Walk-in Customer</span>
+                                    <span class="customer-purchase-info" id="customerPurchaseInfo">No previous purchase information</span>
+                                </div>
                             </div>
-                            <div class="compact-hint text-start">Existing customer will be selected. New typed name is used as Walk-in for this bill only.</div>
+                            <div class="compact-hint text-start">Registered customers are linked automatically. Unregistered names remain Walk-in customers.</div>
                         </div>
 
                         <div class="compact-card compact-search-card">
@@ -1260,7 +1360,7 @@ if ($businessId <= 0) {
                         <div class="customer-mini-stats">
                             <span class="mini-stat" id="customerOutstanding">Outstanding ₹0.00</span>
                             <span class="mini-stat" id="customerLoyalty">Loyalty 0</span>
-                            <span class="mini-stat" id="customerHistory">History 0</span>
+                            <span class="mini-stat" id="customerHistory">Bills 0</span>
                         </div>
                     </div>
 
@@ -1594,6 +1694,9 @@ if ($businessId <= 0) {
         billNo: document.getElementById('billNo'),
         dateTime: document.getElementById('dateTime'),
         customerSearch: document.getElementById('customerSearch'),
+        customerStatusBadge: document.getElementById('customerStatusBadge'),
+        customerPurchaseInfo: document.getElementById('customerPurchaseInfo'),
+        customerSearchGrid: document.getElementById('customerSearchGrid'),
         customerSuggestions: document.getElementById('customerSuggestions'),
         productSearch: document.getElementById('productSearch'),
         productSuggestions: document.getElementById('productSuggestions'),
@@ -1757,6 +1860,16 @@ if ($businessId <= 0) {
         return endpoints;
     }
 
+    function apiThermalPrintSucceeded(data) {
+        data=data||{};
+        if (data.thermal_print_success===true || data.thermal_print_success===1 || data.thermal_print_success==='1') return true;
+        const result=data.thermal_print_result||{};
+        if (result.success===true || result.success===1 || result.success==='1' || result.printed===true || String(result.status||'').toLowerCase()==='success') return true;
+        const text=String(result.response||data.thermal_print||'').trim().toUpperCase();
+        if (text.includes('ERROR')||text.includes('FAIL')||text.includes('EXCEPTION')) return false;
+        return text.includes('PRINT_SUCCESS')||text.includes('PRINT SUCCESS')||text.includes('PRINTED')||text==='OK';
+    }
+
     function thermalResponseSuccess(response, responseText, json) {
         const normalized = String(responseText || '').trim().toUpperCase();
         const status = String((json && json.status) || '').trim().toLowerCase();
@@ -1787,6 +1900,8 @@ if ($businessId <= 0) {
 
         const billId = parseInt(options.billId || printData.BillId || 0, 10);
         const forceReprint = options.forceReprint === true;
+        const notifySuccess = options.notifySuccess !== false;
+        const notifyFailure = options.notifyFailure !== false;
         const now = Date.now();
 
         if (thermalPrintInProgress) {
@@ -1839,7 +1954,7 @@ if ($businessId <= 0) {
                             lastThermalPrintedAt = Date.now();
                         }
                         localStorage.setItem('gk_thermal_print_endpoint', endpoint);
-                        showMessage('success', 'One bill sent to thermal printer.');
+                        if (notifySuccess) showMessage('success', 'One bill sent to thermal printer.');
                         return true;
                     }
 
@@ -1861,7 +1976,7 @@ if ($businessId <= 0) {
                             lastThermalPrintedAt = Date.now();
                         }
                         localStorage.setItem('gk_thermal_print_endpoint', endpoint);
-                        showMessage('success', 'Print request sent to the thermal printer.');
+                        if (notifySuccess) showMessage('success', 'Print request sent to the thermal printer.');
                         return true;
                     }
                 } finally {
@@ -1870,11 +1985,9 @@ if ($businessId <= 0) {
             }
 
             console.error('Thermal print service connection failed:', lastError);
-            showMessage(
-                'warning',
-                'Bill saved successfully, but the local thermal print app is not running or is blocked. '
-                + 'Start the print app and confirm port 17900 is open.'
-            );
+            if (notifyFailure) {
+                showMessage('warning','The bill was saved, but the thermal print request failed. Confirm that the local print app is running on port 17900.');
+            }
             return false;
         } finally {
             thermalPrintInProgress = false;
@@ -2073,7 +2186,11 @@ if ($businessId <= 0) {
             state.selectedCustomer = saved.selected_customer || null;
             state.paymentMode = saved.payment_mode || state.paymentMode || 'cash';
             state.selectedPaymentMethodId = saved.selected_payment_method_id || state.selectedPaymentMethodId || 0;
-            el.customerSearch.value = saved.customer_search || (state.selectedCustomer ? (state.selectedCustomer.customer_name + (state.selectedCustomer.mobile ? ' - ' + state.selectedCustomer.mobile : '')) : '');
+            const restoredName = state.selectedCustomer
+                ? String(state.selectedCustomer.customer_name || '')
+                : '';
+            el.customerSearch.value = saved.customer_search
+                || (restoredName && restoredName !== 'Walk-in Customer' ? restoredName : '');
             el.billDiscountType.value = saved.bill_discount_type || 'none';
             el.billDiscountValue.value = toNumber(saved.bill_discount_value || 0).toFixed(2);
             el.offerCode.value = saved.offer_code || '';
@@ -2404,24 +2521,72 @@ if ($businessId <= 0) {
         el.branchSelect.value = String(state.branchId || (state.branches[0] && state.branches[0].branch_id) || '');
     }
 
+    function formatCustomerDate(value) {
+        value = String(value || '').trim();
+        if (!value) return '';
+        const datePart = value.substring(0, 10);
+        const parts = datePart.split('-');
+        return parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : value;
+    }
+
+    function customerIsRegistered(customer) {
+        return !!(customer && parseInt(customer.customer_id || 0, 10) > 0 && String(customer.customer_type || 'registered') !== 'walk_in');
+    }
+
+    function customerPurchaseText(customer) {
+        customer = customer || {};
+        const bills = parseInt(customer.total_bills || customer.purchase_count || 0, 10);
+        const lastDate = formatCustomerDate(customer.last_purchase_date || '');
+        const amount = toNumber(customer.total_purchase_amount || customer.total_bill_amount || 0);
+        const parts = [];
+        if (bills > 0) parts.push('<strong>' + bills + '</strong> bill' + (bills === 1 ? '' : 's'));
+        if (lastDate) parts.push('Last: <strong>' + escapeHtml(lastDate) + '</strong>');
+        if (amount > 0) parts.push('Total: <strong>' + money.format(amount) + '</strong>');
+        return parts.length ? parts.join(' • ') : 'No previous purchase information';
+    }
+
     function renderCustomer() {
         const c = state.selectedCustomer;
+        const registered = customerIsRegistered(c);
+
         if (!c) {
             el.selectedCustomerName.textContent = 'Walk-in Customer';
-            el.selectedCustomerMeta.textContent = 'No mobile • no outstanding';
+            el.selectedCustomerMeta.textContent = 'No mobile • bill-only customer';
             el.customerAvatar.textContent = 'W';
             el.customerOutstanding.textContent = 'Outstanding ₹0.00';
             el.customerLoyalty.textContent = 'Loyalty 0';
-            el.customerHistory.textContent = 'History 0';
+            el.customerHistory.textContent = 'Bills 0';
+            el.customerStatusBadge.className = 'customer-status-badge walkin';
+            el.customerStatusBadge.innerHTML = '<i data-lucide="shopping-bag"></i> Walk-in Customer';
+            el.customerPurchaseInfo.innerHTML = 'No previous purchase information';
+            refreshIcons();
             return;
         }
-        const name = c.customer_name || c.name || 'Customer';
+
+        const name = c.customer_name || c.name || 'Walk-in Customer';
+        const mobile = normalizeMobile(c.mobile || c.customer_mobile || '');
+        const bills = parseInt(c.total_bills || c.purchase_count || 0, 10);
+
         el.selectedCustomerName.textContent = name;
-        el.selectedCustomerMeta.textContent = (c.mobile || 'No mobile') + (c.email ? ' • ' + c.email : '');
+        el.selectedCustomerMeta.textContent = (mobile || 'No mobile') + (c.email ? ' • ' + c.email : '');
         el.customerAvatar.textContent = name.substring(0, 1).toUpperCase();
         el.customerOutstanding.textContent = 'Outstanding ' + money.format(toNumber(c.outstanding_balance || c.opening_outstanding || 0));
         el.customerLoyalty.textContent = 'Loyalty ' + toNumber(c.loyalty_points || 0).toFixed(0);
-        el.customerHistory.textContent = 'History ' + toNumber(c.total_bill_amount || 0).toFixed(0);
+        el.customerHistory.textContent = 'Bills ' + bills;
+
+        if (registered) {
+            el.customerStatusBadge.className = 'customer-status-badge registered';
+            el.customerStatusBadge.innerHTML = '<i data-lucide="badge-check"></i> Registered Customer';
+        } else if (bills > 0) {
+            el.customerStatusBadge.className = 'customer-status-badge previous';
+            el.customerStatusBadge.innerHTML = '<i data-lucide="history"></i> Walk-in • Previous Purchase';
+        } else {
+            el.customerStatusBadge.className = 'customer-status-badge walkin';
+            el.customerStatusBadge.innerHTML = '<i data-lucide="shopping-bag"></i> Walk-in Customer';
+        }
+
+        el.customerPurchaseInfo.innerHTML = customerPurchaseText(c);
+        refreshIcons();
     }
 
     function renderProduct(product) {
@@ -2957,177 +3122,153 @@ if ($businessId <= 0) {
         }
     }
 
-    async function searchCustomers(query) {
-        query = String(query || '').trim();
-        try {
-            const data = await apiGet({ action: 'search_customers', q: query });
-            const allCustomers = data.success ? (data.customers || []) : [];
-            const customers = allCustomers.slice(0, 5);
-            let html = `<div class="suggestion-header"><span>${query ? 'Matching Customers' : 'Recent Customers'}</span><span>Showing ${customers.length} of ${allCustomers.length}</span></div>`;
-            if (!customers.length && !query) {
-                html += `<div class="suggestion-item is-empty">
-                    <div class="suggestion-img"><i data-lucide="users" style="width:16px;height:16px;"></i></div>
-                    <div class="suggestion-content">
-                        <div class="suggestion-name">No saved customers yet</div>
-                        <div class="suggestion-meta"><span>Type a customer name for walk-in bill or add mobile/details to save customer master.</span></div>
-                    </div>
-                </div>`;
-            }
-            html += customers.map(function (c) {
-                const initial = escapeHtml((c.customer_name || 'C').substring(0,1).toUpperCase());
-                return `<div class="suggestion-item js-customer-suggestion" data-id="${c.customer_id}" title="Select customer">
-                    <div class="suggestion-img">${initial}</div>
-                    <div class="suggestion-content">
-                        <div class="suggestion-name">${escapeHtml(c.customer_name || 'Customer')}</div>
-                        <div class="suggestion-meta">
-                            <span>${escapeHtml(c.mobile || 'No mobile')}</span>
-                            <span>Outstanding ${money.format(toNumber(c.outstanding_balance || 0))}</span>
-                            <span>Loyalty ${toNumber(c.loyalty_points || 0)}</span>
-                            <span>Bills ${toNumber(c.purchase_count || 0)}</span>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-            if (query) {
-                html += `<div class="suggestion-item is-create js-create-customer-from-search" title="Create new customer">
-                    <div class="suggestion-img">+</div>
-                    <div class="suggestion-content">
-                        <div class="suggestion-name">Use "${escapeHtml(query)}" in this bill</div>
-                        <div class="suggestion-meta"><span>New POS customer names stay Walk-in only. Customer Master records are created only from Customer Master.</span></div>
-                    </div>
-                </div>`;
-            }
-            el.customerSuggestions.customers = customers;
-            el.customerSuggestions.allCustomers = allCustomers;
-            el.customerSuggestions.innerHTML = html;
-            el.customerSuggestions.style.display = 'block';
-            if (window.lucide) window.lucide.createIcons();
-        } catch (error) {}
+    let customerSearchController = null;
+    let customerSearchSequence = 0;
+
+    function currentCustomerQuery() {
+        return String(el.customerSearch.value || '').trim().replace(/\s+/g, ' ');
+    }
+
+    function closeCustomerSuggestions(cancelPending) {
+        clearTimeout(customerSearchTimer);
+        if (cancelPending !== false && customerSearchController) {
+            customerSearchController.abort();
+            customerSearchController = null;
+            customerSearchSequence++;
+        }
+        el.customerSuggestions.style.display = 'none';
+        el.customerSearchGrid.classList.remove('customer-search-loading');
     }
 
     function selectedCustomerLabel(customer) {
         customer = customer || {};
-        return (customer.customer_name || customer.name || 'Customer') + (customer.mobile ? ' - ' + customer.mobile : '');
+        return String(customer.customer_name || customer.name || 'Customer').trim();
     }
 
     function normalizeCustomerName(value) {
         return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
     }
 
-    function hasRegularCustomerDetails(customer) {
+    function setCustomerFields(customer) {
         customer = customer || {};
-        return !!(normalizeMobile(customer.mobile || customer.customer_mobile || '')
-            || String(customer.email || '').trim()
-            || String(customer.gstin || '').trim()
-            || String(customer.address || '').trim());
+        el.customerSearch.value = String(customer.customer_name || customer.name || '').trim();
+    }
+
+    function selectCustomer(customer, closeSuggestions) {
+        if (!customer) return;
+        state.selectedCustomer = Object.assign({}, customer);
+        state.selectedCustomer.customer_id = parseInt(state.selectedCustomer.customer_id || 0, 10);
+        state.selectedCustomer.customer_type = state.selectedCustomer.customer_id > 0 ? 'registered' : 'walk_in';
+        state.selectedCustomer.is_walkin_customer = state.selectedCustomer.customer_id > 0 ? 0 : 1;
+        setCustomerFields(state.selectedCustomer);
+        if (closeSuggestions !== false) closeCustomerSuggestions(true);
+        renderCustomer();
+        renderSummary();
+        persistCurrentBill();
+    }
+
+    function makeWalkInCustomer(name) {
+        name = String(name || '').trim().replace(/\s+/g, ' ');
+        if (!name) name = 'Walk-in Customer';
+        return {
+            customer_id: 0, customer_name: name, mobile: '', email: '', address: '', gstin: '',
+            is_walkin_customer: 1, customer_type: 'walk_in', customer_source: 'walk_in',
+            save_to_master: 0, visible_in_customer_master: 0, outstanding_balance: 0,
+            loyalty_points: 0, total_bills: 0, purchase_count: 0,
+            last_purchase_date: '', total_purchase_amount: 0, previous_purchase_available: 0
+        };
     }
 
     function makeBillOnlyWalkInFromPayload(payload) {
         payload = payload || {};
-        const name = String(payload.customer_name || payload.name || '').trim();
-        const mobile = normalizeMobile(payload.mobile || payload.customer_mobile || '');
-        const customer = makeWalkInCustomer(name || 'Walk-in Customer', mobile);
+        const customer = makeWalkInCustomer(payload.customer_name || payload.name || 'Walk-in Customer');
+        customer.mobile = normalizeMobile(payload.mobile || payload.customer_mobile || '');
         customer.email = String(payload.email || '').trim();
         customer.gstin = String(payload.gstin || '').trim().toUpperCase();
         customer.address = String(payload.address || '').trim();
         return customer;
     }
 
-    function makeWalkInCustomer(name, mobile) {
-        name = String(name || '').trim();
-        mobile = normalizeMobile(mobile || '');
-        if (!name || /^\d+$/.test(name)) { name = 'Walk-in Customer'; }
-        return {
-            customer_id: 0,
-            customer_name: name,
-            mobile: mobile,
-            is_walkin_customer: 1,
-            customer_source: 'walk_in',
-            save_to_master: 0,
-            visible_in_customer_master: 0,
-            outstanding_balance: 0,
-            loyalty_points: 0,
-            purchase_count: 0
-        };
+    function applyWalkInFromInput() {
+        const walkin = makeWalkInCustomer(currentCustomerQuery());
+        state.selectedCustomer = walkin;
+        renderCustomer(); renderSummary(); persistCurrentBill();
+        return walkin;
+    }
+
+    function customerSuggestionHtml(customer, index) {
+        const name = String(customer.customer_name || 'Customer').trim();
+        const mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
+        const bills = parseInt(customer.total_bills || customer.purchase_count || 0, 10);
+        const lastDate = formatCustomerDate(customer.last_purchase_date || '');
+        const totalAmount = toNumber(customer.total_purchase_amount || 0);
+        return `<div class="suggestion-item js-customer-suggestion" data-index="${index}" data-id="${parseInt(customer.customer_id || 0, 10)}" title="Select registered customer">
+            <div class="suggestion-img">${escapeHtml(name.substring(0,1).toUpperCase() || 'C')}</div>
+            <div class="suggestion-content">
+                <div class="customer-suggestion-heading"><div class="suggestion-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div><span class="customer-suggestion-type registered">Registered</span></div>
+                <div class="suggestion-meta"><span><i data-lucide="phone" style="width:11px;height:11px"></i> ${escapeHtml(mobile || 'No mobile')}</span>${customer.email ? `<span>${escapeHtml(customer.email)}</span>` : ''}</div>
+                <div class="customer-suggestion-purchases"><span>Bills: <strong>${bills}</strong></span>${lastDate ? `<span>Last: <strong>${escapeHtml(lastDate)}</strong></span>` : ''}${totalAmount > 0 ? `<span>Total: <strong>${money.format(totalAmount)}</strong></span>` : ''}</div>
+            </div></div>`;
+    }
+
+    async function searchCustomers(query, autoSelectExact) {
+        query = String(query || currentCustomerQuery() || '').trim();
+        const sequence = ++customerSearchSequence;
+        if (customerSearchController) customerSearchController.abort();
+        customerSearchController = new AbortController();
+        el.customerSearchGrid.classList.add('customer-search-loading');
+        try {
+            const url = new URL(apiUrl, window.location.href);
+            url.searchParams.set('action','search_customers'); url.searchParams.set('q',query);
+            url.searchParams.set('limit','10'); url.searchParams.set('branch_id',String(state.branchId || 0));
+            const response = await fetch(url.toString(), {credentials:'same-origin',cache:'no-store',signal:customerSearchController.signal});
+            const data = await response.json();
+            if (sequence !== customerSearchSequence || !data.success) return null;
+            customerSearchController = null;
+            const customers = Array.isArray(data.customers) ? data.customers : [];
+            el.customerSuggestions.customers = customers;
+            let html = `<div class="suggestion-header"><span>${query ? 'Matching Customers' : 'Recent Registered Customers'}</span><span>${customers.length} result${customers.length===1?'':'s'}</span></div>`;
+            if (!customers.length) html += `<div class="suggestion-item is-empty"><div class="suggestion-img"><i data-lucide="user-round-search"></i></div><div class="suggestion-content"><div class="suggestion-name">No registered customer found</div><div class="suggestion-meta"><span>The entered name will be used as a Walk-in Customer.</span></div></div></div>`;
+            else html += customers.map(customerSuggestionHtml).join('');
+            if (query && !data.exact_customer) html += `<div class="suggestion-item is-create js-use-walkin-customer"><div class="suggestion-img"><i data-lucide="shopping-bag"></i></div><div class="suggestion-content"><div class="suggestion-name">Use "${escapeHtml(query)}" as Walk-in Customer</div><div class="suggestion-meta"><span>This name is used only for the current bill.</span></div></div></div>`;
+            el.customerSuggestions.innerHTML=html; el.customerSuggestions.style.display='block'; refreshIcons();
+            if (autoSelectExact !== false && data.exact_customer) { selectCustomer(data.exact_customer,true); return data.exact_customer; }
+            if (!data.exact_customer && query) applyWalkInFromInput();
+            return null;
+        } catch(error) { if (error.name !== 'AbortError') applyWalkInFromInput(); return null; }
+        finally { if (sequence===customerSearchSequence) el.customerSearchGrid.classList.remove('customer-search-loading'); }
     }
 
     function buildCustomerPayload() {
-        let customer = state.selectedCustomer ? Object.assign({}, state.selectedCustomer) : null;
-        if (!customer) {
-            const value = el.customerSearch.value.trim();
-            customer = makeWalkInCustomer(value || 'Walk-in Customer', normalizeMobile(value));
-        }
-        customer.customer_id = parseInt(customer.customer_id || 0, 10);
-        customer.customer_name = String(customer.customer_name || customer.name || 'Walk-in Customer').trim() || 'Walk-in Customer';
-        customer.mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
-        if (customer.customer_id > 0) {
-            customer.is_walkin_customer = 0;
-            customer.customer_source = 'master';
-            customer.save_to_master = 1;
-            customer.visible_in_customer_master = 1;
-        } else {
-            customer.is_walkin_customer = 1;
-            customer.customer_source = 'walk_in';
-            customer.save_to_master = 0;
-            customer.visible_in_customer_master = 0;
-        }
+        let customer = state.selectedCustomer ? Object.assign({},state.selectedCustomer) : null;
+        if (!customer) customer = applyWalkInFromInput();
+        customer.customer_id=parseInt(customer.customer_id||0,10);
+        customer.customer_name=String(customer.customer_name||customer.name||currentCustomerQuery()||'Walk-in Customer').trim()||'Walk-in Customer';
+        customer.mobile=normalizeMobile(customer.mobile||customer.customer_mobile||'');
+        if (customer.customer_id>0) { customer.is_walkin_customer=0; customer.customer_type='registered'; customer.customer_source='master'; customer.save_to_master=1; customer.visible_in_customer_master=1; }
+        else { customer.is_walkin_customer=1; customer.customer_type='walk_in'; customer.customer_source='walk_in'; customer.save_to_master=0; customer.visible_in_customer_master=0; }
         return customer;
     }
 
     async function findExactCustomer(customer) {
-        customer = customer || {};
-        const mobile = normalizeMobile(customer.mobile || customer.customer_mobile || '');
-        const name = String(customer.customer_name || customer.name || '').trim();
-        const query = mobile || name;
-        if (!query) { return null; }
-        try {
-            const data = await apiGet({ action: 'search_customers', q: query, limit: 20 });
-            const rows = data.success ? (data.customers || []) : [];
-            const nameKey = normalizeCustomerName(name);
-            if (mobile) {
-                const byMobile = rows.find(function (row) { return normalizeMobile(row.mobile || row.customer_mobile || '') === mobile; });
-                if (byMobile) { return byMobile; }
-            }
-            if (nameKey) {
-                const byName = rows.find(function (row) { return normalizeCustomerName(row.customer_name || row.name || '') === nameKey; });
-                if (byName) { return byName; }
-            }
-        } catch (error) {}
-        return null;
+        const name=String((customer||{}).customer_name||(customer||{}).name||'').trim();
+        if (!name) return null;
+        try { const data=await apiGet({action:'search_customers',q:name,limit:20,branch_id:state.branchId||0}); return data.success&&data.exact_customer?data.exact_customer:null; }
+        catch(error){ return null; }
     }
 
     async function prepareCustomerForSubmit() {
-        if (state.selectedCustomer && parseInt(state.selectedCustomer.customer_id || 0, 10) > 0) {
-            return state.selectedCustomer;
-        }
-        const value = el.customerSearch.value.trim();
-        if (!value) {
-            state.selectedCustomer = null;
-            return null;
-        }
-        const candidate = makeWalkInCustomer(value, normalizeMobile(value));
-        const existing = await findExactCustomer(candidate);
-        if (existing) {
-            state.selectedCustomer = existing;
-            el.customerSearch.value = selectedCustomerLabel(existing);
-            renderCustomer();
-            renderSummary();
-            persistCurrentBill();
-            return existing;
-        }
-        state.selectedCustomer = candidate;
-        renderCustomer();
-        renderSummary();
-        persistCurrentBill();
-        return candidate;
+        const name=currentCustomerQuery();
+        if (!name) { state.selectedCustomer=makeWalkInCustomer('Walk-in Customer'); renderCustomer(); return state.selectedCustomer; }
+        if (state.selectedCustomer && normalizeCustomerName(state.selectedCustomer.customer_name||'')===normalizeCustomerName(name)) return state.selectedCustomer;
+        const existing=await findExactCustomer({customer_name:name});
+        if (existing) { selectCustomer(existing,true); return existing; }
+        const walkin=makeWalkInCustomer(name); selectCustomer(walkin,true); return walkin;
     }
 
     function setWalkInCustomer() {
-        state.selectedCustomer = null;
-        el.customerSearch.value = '';
-        el.customerSuggestions.style.display = 'none';
-        renderCustomer();
-        renderSummary();
+        state.selectedCustomer=makeWalkInCustomer('Walk-in Customer'); el.customerSearch.value='';
+        closeCustomerSuggestions(true); renderCustomer(); renderSummary(); persistCurrentBill();
     }
 
     function buildPayload() {
@@ -3271,23 +3412,23 @@ if ($businessId <= 0) {
                 showMessage('error', data.message || 'Bill save failed.');
                 return;
             }
-            showMessage('success', data.message || 'Bill saved.');
             state.lastSavedBill = data.saved.bill || null;
             state.lastSavedBillId = parseInt(data.saved.bill_id || (state.lastSavedBill ? state.lastSavedBill.bill_id : 0) || 0, 10);
             state.lastSavedItems = itemsSnapshot;
             state.lastSavedCustomerName = customerNameSnapshot;
             state.lastSavedBranchName = branchNameSnapshot;
-            if (state.lastSavedBill) {
-                state.billBarcode = state.lastSavedBill.bill_barcode || state.lastSavedBill.barcode_value || state.billBarcode || '';
-            }
+            if (state.lastSavedBill) state.billBarcode = state.lastSavedBill.bill_barcode || state.lastSavedBill.barcode_value || state.billBarcode || '';
             if (printAfter) {
-                const printData = buildThermalPrintData(state.lastSavedBill, itemsSnapshot, customerNameSnapshot, branchNameSnapshot);
-                printData.PrintType = 'CREATE_BILL';
-                await printViaThermalService(printData, {
-                    billId: state.lastSavedBillId,
-                    forceReprint: false
-                });
-            }
+                let printed = apiThermalPrintSucceeded(data);
+                if (printed) { lastThermalPrintedBillId=state.lastSavedBillId; lastThermalPrintedAt=Date.now(); }
+                else {
+                    const printData=buildThermalPrintData(state.lastSavedBill,itemsSnapshot,customerNameSnapshot,branchNameSnapshot);
+                    printData.PrintType='CREATE_BILL';
+                    printed=await printViaThermalService(printData,{billId:state.lastSavedBillId,forceReprint:false,notifySuccess:false,notifyFailure:false});
+                }
+                if (printed) showMessage('success','Bill saved and printed successfully.');
+                else showMessage('warning','Bill saved successfully, but the thermal print request genuinely failed. Confirm that the local print app is running on port 17900.');
+            } else showMessage('success',data.message||'Bill saved successfully.');
             resetBill(true);
             await refreshNumbersAndHolds();
             await loadBillHistory();
@@ -3539,7 +3680,14 @@ if ($businessId <= 0) {
     let productSearchTimer = null;
     let customerSearchTimer = null;
 
+    el.productSearch.addEventListener('focus', async function () {
+        closeCustomerSuggestions(true);
+        await prepareCustomerForSubmit();
+        closeCustomerSuggestions(true);
+    });
+
     el.productSearch.addEventListener('input', function () {
+        closeCustomerSuggestions(true);
         clearTimeout(productSearchTimer);
         productSearchTimer = setTimeout(function () { searchProducts(el.productSearch.value.trim()); }, 220);
     });
@@ -3551,37 +3699,17 @@ if ($businessId <= 0) {
         }
     });
 
-    el.customerSearch.addEventListener('input', function () {
+    function customerInputChanged() {
         clearTimeout(customerSearchTimer);
-        const typed = el.customerSearch.value.trim();
-        if (state.selectedCustomer && typed !== selectedCustomerLabel(state.selectedCustomer)) {
-            state.selectedCustomer = null;
-            renderCustomer();
-            renderSummary();
-        }
-        customerSearchTimer = setTimeout(function () { searchCustomers(typed); }, 250);
-        persistCurrentBill();
-    });
-
-    el.customerSearch.addEventListener('focus', function () {
-        searchCustomers(el.customerSearch.value.trim());
-    });
-
-    el.customerSearch.addEventListener('keydown', async function (event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            await prepareCustomerForSubmit();
-            el.customerSuggestions.style.display = 'none';
-        }
-    });
-
-    el.customerSearch.addEventListener('blur', function () {
-        window.setTimeout(function () {
-            if (!state.selectedCustomer && el.customerSearch.value.trim()) {
-                prepareCustomerForSubmit();
-            }
-        }, 180);
-    });
+        const typedName=currentCustomerQuery();
+        if (state.selectedCustomer && normalizeCustomerName(state.selectedCustomer.customer_name||'')!==normalizeCustomerName(typedName)) state.selectedCustomer=null;
+        if (typedName) { applyWalkInFromInput(); customerSearchTimer=setTimeout(function(){searchCustomers(typedName,true);},220); }
+        else { state.selectedCustomer=makeWalkInCustomer('Walk-in Customer'); renderCustomer(); renderSummary(); closeCustomerSuggestions(true); }
+    }
+    el.customerSearch.addEventListener('input',customerInputChanged);
+    el.customerSearch.addEventListener('focus',function(){el.productSuggestions.style.display='none';searchCustomers(currentCustomerQuery(),false);});
+    el.customerSearch.addEventListener('keydown',async function(event){if(event.key==='Enter'){event.preventDefault();await prepareCustomerForSubmit();closeCustomerSuggestions(true);}});
+    el.customerSearch.addEventListener('blur',function(){window.setTimeout(function(){if(!state.selectedCustomer&&currentCustomerQuery())prepareCustomerForSubmit();},180);});
 
     el.branchSelect.addEventListener('change', async function () {
         const oldBranchId = state.branchId;
@@ -3606,29 +3734,36 @@ if ($businessId <= 0) {
 
         const customerNode = event.target.closest('.js-customer-suggestion');
         if (customerNode) {
-            const id = parseInt(customerNode.dataset.id || 0, 10);
-            const c = (el.customerSuggestions.customers || []).find(x => Number(x.customer_id) === Number(id));
-            if (c) {
-                state.selectedCustomer = c;
-                el.customerSearch.value = selectedCustomerLabel(c);
-                el.customerSuggestions.style.display = 'none';
-                renderCustomer();
-                renderSummary();
-                persistCurrentBill();
-            }
+            const index = parseInt(customerNode.dataset.index || -1, 10);
+            const c = (el.customerSuggestions.customers || [])[index];
+            if (c) selectCustomer(c, true);
+        }
+
+        if (event.target.closest('.js-use-walkin-customer')) {
+            const walkinCustomer = applyWalkInFromInput();
+            selectCustomer(walkinCustomer, true);
         }
 
         if (event.target.closest('.js-create-customer-from-search')) {
-            const value = el.customerSearch.value.trim();
             document.getElementById('customerForm').reset();
-            document.getElementById('newCustomerName').value = /^\d+$/.test(value) ? '' : value;
-            document.getElementById('newCustomerMobile').value = normalizeMobile(value);
+            document.getElementById('newCustomerName').value = currentCustomerQuery();
+            document.getElementById('newCustomerMobile').value = '';
             modal('customerModal').show();
         }
 
-        const insideSearchArea = event.target.closest('.pos-customer-bar, .pos-search-box, .suggestion-list');
-        if (!insideSearchArea) {
-            el.customerSuggestions.style.display = 'none';
+        const insideCustomerArea = event.target.closest('.customer-search-grid, #customerSuggestions');
+        const insideProductArea = event.target.closest('.pos-search-box, #productSuggestions');
+
+        if (insideProductArea) {
+            closeCustomerSuggestions(true);
+        }
+
+        if (insideCustomerArea) {
+            el.productSuggestions.style.display = 'none';
+        }
+
+        if (!insideCustomerArea && !insideProductArea) {
+            closeCustomerSuggestions(true);
             el.productSuggestions.style.display = 'none';
         }
 
@@ -3912,10 +4047,10 @@ if ($businessId <= 0) {
     document.getElementById('focusSearchBtn').addEventListener('click', function () { el.productSearch.focus(); });
     document.getElementById('walkInBtn').addEventListener('click', setWalkInCustomer);
     document.getElementById('addCustomerBtn').addEventListener('click', function () {
-        const value = el.customerSearch.value.trim();
         document.getElementById('customerForm').reset();
-        document.getElementById('newCustomerName').value = /^\d+$/.test(value) ? '' : value;
-        document.getElementById('newCustomerMobile').value = normalizeMobile(value);
+        document.getElementById('newCustomerName').value = currentCustomerQuery();
+        document.getElementById('newCustomerMobile').value = '';
+        closeCustomerSuggestions(true);
         modal('customerModal').show();
     });
     document.getElementById('clearItemsBtn').addEventListener('click', function () {
@@ -4001,7 +4136,7 @@ if ($businessId <= 0) {
             const existing = await findExactCustomer(payload);
             if (existing) {
                 state.selectedCustomer = existing;
-                el.customerSearch.value = selectedCustomerLabel(existing);
+                setCustomerFields(existing);
                 renderCustomer();
                 renderSummary();
                 persistCurrentBill();
@@ -4011,7 +4146,7 @@ if ($businessId <= 0) {
                 return;
             }
             state.selectedCustomer = makeBillOnlyWalkInFromPayload(payload);
-            el.customerSearch.value = selectedCustomerLabel(state.selectedCustomer);
+            setCustomerFields(state.selectedCustomer);
             renderCustomer();
             renderSummary();
             persistCurrentBill();
