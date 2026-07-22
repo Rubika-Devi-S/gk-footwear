@@ -498,7 +498,7 @@ if (function_exists('csrf_token')) {
                         <div>
                             <div class="mp-stat-label">Available Qty</div>
                             <div class="mp-stat-value" id="totalQty">0.00</div>
-                            <div class="mp-stat-sub">Ready to bill</div>
+                            <div class="mp-stat-sub">Current page stock</div>
                         </div>
                     </article>
                 </div>
@@ -772,8 +772,152 @@ if (function_exists('csrf_token')) {
         return Number.isFinite(number) ? number : parseFloat(fallback || 0);
     }
 
+    /*
+     * Returns null when none of the requested fields exists. This is important
+     * because a real available quantity of 0 must not be treated as missing.
+     */
+    function numericValueOrNull(source, keys) {
+        source = source || {};
+
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+
+            if (!Object.prototype.hasOwnProperty.call(source, key)) {
+                continue;
+            }
+
+            const rawValue = source[key];
+
+            if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') {
+                continue;
+            }
+
+            const number = parseFloat(rawValue);
+
+            if (Number.isFinite(number)) {
+                return number;
+            }
+        }
+
+        return null;
+    }
+
+    function itemLowStockLimit(item) {
+        const configuredLimit = numericValueOrNull(item, [
+            'low_stock_limit',
+            'low_stock_threshold',
+            'minimum_stock_qty',
+            'minimum_stock_alert',
+            'min_stock',
+            'reorder_level'
+        ]);
+
+        return configuredLimit !== null && configuredLimit >= 0
+            ? configuredLimit
+            : 5;
+    }
+
+    /*
+     * Convert barcode values returned by different model/API shapes
+     * into a single pipe-separated string.
+     */
+    function normalizeBarcodeValue(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+
+        if (Array.isArray(value)) {
+            const values = value
+                .map(function (entry) {
+                    return normalizeBarcodeValue(entry);
+                })
+                .filter(Boolean);
+
+            return Array.from(
+                new Set(values.join('|').split('|').map(function (v) {
+                    return String(v).trim();
+                }).filter(Boolean))
+            ).join('|');
+        }
+
+        if (typeof value === 'object') {
+            const objectCandidates = [
+                value.barcode_value,
+                value.barcode,
+                value.barcode_no,
+                value.barcode_number,
+                value.code,
+                value.value,
+                value.qr_code,
+                value.generated_barcode,
+                value.generated_barcode_value,
+                value.stock_barcode
+            ];
+
+            for (let i = 0; i < objectCandidates.length; i++) {
+                const normalized = normalizeBarcodeValue(objectCandidates[i]);
+
+                if (normalized) {
+                    return normalized;
+                }
+            }
+
+            return '';
+        }
+
+        const text = String(value).trim();
+        const lower = text.toLowerCase();
+
+        if (
+            !text ||
+            text === '-' ||
+            lower === 'no qr' ||
+            lower === 'no barcode' ||
+            text === '[object Object]'
+        ) {
+            return '';
+        }
+
+        return text;
+    }
+
     function normalizeStockItem(raw) {
         raw = raw || {};
+
+        const originalQty = numericValue(raw, ['qty','inward_qty','quantity','stock_qty','total_qty'], 0);
+        let availableQty = numericValueOrNull(raw, [
+            /* Prefer the model's live/current stock value when available. */
+            'stock',
+            'current_qty',
+            'live_stock',
+            'current_stock',
+            'available_qty',
+            'available_stock',
+            'balance_qty',
+            'stock_balance',
+            'closing_stock'
+        ]);
+
+        /*
+         * Derive available quantity only when the API did not return any live
+         * stock field. A genuine zero value must remain zero.
+         */
+        if (availableQty === null) {
+            const soldQty = numericValue(raw, ['sold_qty','total_sold_qty','out_qty','qty_out'], 0);
+            availableQty = Math.max(0, originalQty - soldQty);
+        }
+
+        availableQty = Number.isFinite(availableQty) ? Math.max(0, availableQty) : 0;
+
+        const rawStatus = String(firstValue(raw, ['item_status','stock_status','status'], 'active'))
+            .toLowerCase()
+            .trim();
+
+        let calculatedStatus = rawStatus;
+
+        if (!['cancelled', 'deleted', 'inactive'].includes(rawStatus)) {
+            calculatedStatus = availableQty <= 0 ? 'out_of_stock' : 'active';
+        }
 
         const normalized = Object.assign({}, raw, {
             stock_item_id: parseInt(firstValue(raw, ['stock_item_id','item_id','id'], 0), 10) || 0,
@@ -800,29 +944,42 @@ if (function_exists('csrf_token')) {
             supplier_name: String(firstValue(raw, ['supplier_name','vendor_name'], '-')),
             supplier_mobile: String(firstValue(raw, ['supplier_mobile','supplier_phone','vendor_mobile'], '-')),
 
-            qty: numericValue(raw, ['qty','inward_qty','quantity','stock_qty','total_qty'], 0),
-            available_qty: numericValue(raw, ['available_qty','current_stock','available_stock','balance_qty','stock_balance','closing_stock'], 0),
+            qty: originalQty,
+            available_qty: availableQty,
+            sold_qty: numericValue(raw, ['sold_qty','total_sold_qty','out_qty','qty_out'], 0),
+            low_stock_limit: itemLowStockLimit(raw),
             purchase_rate: numericValue(raw, ['purchase_rate','purchase_price','cost_price','unit_cost'], 0),
             mrp_rate: numericValue(raw, ['mrp_rate','mrp','maximum_retail_price'], 0),
             discount_value: numericValue(raw, ['discount_value','discount','product_discount'], 0),
             selling_rate: numericValue(raw, ['selling_rate','selling_price','sale_price','unit_price','price'], 0),
 
-            item_status: String(firstValue(raw, ['item_status','stock_status','status'], 'active')).toLowerCase(),
-            barcode_values: String(firstValue(raw, ['barcode_values','barcodes','barcode_value','barcode','qr_code'], '')),
-            barcode_value: String(firstValue(raw, ['barcode_value','barcode','qr_code','latest_qr_code'], ''))
+            item_status: calculatedStatus,
+            barcode_values: normalizeBarcodeValue(firstValue(raw, [
+                'barcode_values',
+                'barcodes',
+                'barcode_list',
+                'stock_barcodes',
+                'barcode_rows',
+                'barcode_data',
+                'barcode_value',
+                'barcode',
+                'qr_code'
+            ], '')),
+            barcode_value: normalizeBarcodeValue(firstValue(raw, [
+                'barcode_value',
+                'barcode',
+                'barcode_no',
+                'barcode_number',
+                'qr_code',
+                'latest_qr_code',
+                'stock_barcode',
+                'generated_barcode',
+                'generated_barcode_value'
+            ], ''))
         });
 
         if (normalized.selling_rate <= 0 && normalized.mrp_rate > 0) {
             normalized.selling_rate = Math.max(0, normalized.mrp_rate - normalized.discount_value);
-        }
-
-        if (normalized.available_qty <= 0 && normalized.item_status === 'active' && normalized.qty > 0) {
-            const soldQty = numericValue(raw, ['sold_qty','total_sold_qty','out_qty'], 0);
-            normalized.available_qty = Math.max(0, normalized.qty - soldQty);
-        }
-
-        if (normalized.available_qty <= 0 && normalized.item_status === 'active') {
-            normalized.item_status = 'out_of_stock';
         }
 
         return normalized;
@@ -832,10 +989,48 @@ if (function_exists('csrf_token')) {
         stats = stats || {};
         return {
             total_items: numericValue(stats, ['total_items','total_records','item_count','products_count'], 0),
-            total_qty: numericValue(stats, ['total_qty','available_qty','current_stock','total_available_qty'], 0),
+            total_qty: numericValue(stats, ['available_qty','total_available_qty','current_stock','total_qty'], 0),
             total_stock_value: numericValue(stats, ['total_stock_value','stock_value','selling_stock_value','inventory_value'], 0),
             low_stock_items: numericValue(stats, ['low_stock_items','low_stock_count'], 0),
             out_stock_items: numericValue(stats, ['out_stock_items','out_of_stock_items','out_stock_count'], 0)
+        };
+    }
+
+    function calculateStatsFromItems(items) {
+        const normalizedItems = Array.isArray(items)
+            ? items.map(normalizeStockItem)
+            : [];
+
+        const countableItems = normalizedItems.filter(function (item) {
+            return !['deleted', 'cancelled', 'inactive'].includes(String(item.item_status || '').toLowerCase());
+        });
+
+        let totalQty = 0;
+        let totalStockValue = 0;
+        let lowStockItems = 0;
+        let outStockItems = 0;
+
+        countableItems.forEach(function (item) {
+            const availableQty = Math.max(0, parseFloat(item.available_qty || 0));
+            const sellingRate = Math.max(0, parseFloat(item.selling_rate || 0));
+            const lowStockLimit = Math.max(0, parseFloat(item.low_stock_limit || 5));
+
+            totalQty += availableQty;
+            totalStockValue += availableQty * sellingRate;
+
+            if (availableQty <= 0) {
+                outStockItems++;
+            } else if (availableQty <= lowStockLimit) {
+                lowStockItems++;
+            }
+        });
+
+        return {
+            total_items: countableItems.length,
+            total_qty: totalQty,
+            total_stock_value: totalStockValue,
+            low_stock_items: lowStockItems,
+            out_stock_items: outStockItems
         };
     }
 
@@ -846,6 +1041,29 @@ if (function_exists('csrf_token')) {
         document.getElementById('stockValue').textContent = money.format(parseFloat(stats.total_stock_value || 0));
         document.getElementById('lowStockItems').textContent = parseInt(stats.low_stock_items || 0, 10);
         document.getElementById('outStockItems').textContent = parseInt(stats.out_stock_items || 0, 10);
+    }
+
+    /*
+     * The Available Qty card must match the current rows shown in the table.
+     * This avoids showing a quantity from other pagination pages while the
+     * user is checking the presently displayed stock values.
+     */
+    function renderCurrentPageAvailableQty(items) {
+        const currentItems = Array.isArray(items)
+            ? items.map(normalizeStockItem)
+            : [];
+
+        const currentQty = currentItems.reduce(function (total, item) {
+            const status = String(item.item_status || '').toLowerCase();
+
+            if (['deleted', 'cancelled', 'inactive'].includes(status)) {
+                return total;
+            }
+
+            return total + Math.max(0, parseFloat(item.available_qty || 0));
+        }, 0);
+
+        document.getElementById('totalQty').textContent = currentQty.toFixed(2);
     }
 
     function itemInitial(item) {
@@ -886,18 +1104,47 @@ if (function_exists('csrf_token')) {
 
     function stockBarcodeValue(item) {
         item = item || {};
+
         const candidates = [
             item.barcode_values,
             item.barcode_value,
+            item.barcodes,
+            item.barcode_list,
+            item.stock_barcodes,
+            item.barcode_rows,
+            item.barcode_data,
             item.qr_code,
             item.latest_qr_code,
             item.stock_barcode,
-            item.generated_barcode
+            item.generated_barcode,
+            item.generated_barcode_value
         ];
+
         for (let i = 0; i < candidates.length; i++) {
-            const value = String(candidates[i] || '').trim();
-            if (value && value !== '-' && value.toLowerCase() !== 'no qr') return value;
+            const value = normalizeBarcodeValue(candidates[i]);
+
+            if (value) {
+                return value;
+            }
         }
+
+        /*
+         * Stock Inward label generation uses the article number whenever
+         * a separate stock_barcodes.barcode_value is unavailable.
+         * Use the same fallback in both the list and details modal.
+         */
+        const articleNo = String(item.article_no || '').trim();
+
+        if (articleNo && articleNo !== '-') {
+            return articleNo;
+        }
+
+        const stockItemId = parseInt(item.stock_item_id || 0, 10);
+
+        if (stockItemId > 0) {
+            return 'STK' + String(stockItemId).padStart(8, '0');
+        }
+
         return '';
     }
 
@@ -1113,8 +1360,8 @@ if (function_exists('csrf_token')) {
         );
     }
 
-    function filterParams() {
-        return {
+    function filterParams(overrides) {
+        const params = {
             action: 'list',
             search: document.getElementById('search').value,
             stock_status: document.getElementById('stock_status').value,
@@ -1127,6 +1374,36 @@ if (function_exists('csrf_token')) {
             page: currentPage,
             per_page: 20
         };
+
+        return Object.assign(params, overrides || {});
+    }
+
+    async function fetchAccurateFilteredStats() {
+        const allItems = [];
+        const summaryPerPage = 200;
+        let page = 1;
+        let totalPagesForSummary = 1;
+        let safetyCounter = 0;
+
+        do {
+            const data = await apiGet(filterParams({
+                page: page,
+                per_page: summaryPerPage
+            }));
+
+            if (!data.success) {
+                throw new Error(data.message || 'Unable to calculate stock summary.');
+            }
+
+            allItems.push.apply(allItems, extractStockItems(data));
+
+            const pagination = extractPagination(data);
+            totalPagesForSummary = Math.max(1, parseInt(pagination.total_pages || 1, 10));
+            page++;
+            safetyCounter++;
+        } while (page <= totalPagesForSummary && safetyCounter < 100);
+
+        return calculateStatsFromItems(allItems);
     }
 
     function setPagination(pagination) {
@@ -1160,9 +1437,21 @@ if (function_exists('csrf_token')) {
                 return;
             }
 
-            renderStats(extractStats(data));
-            renderStock(extractStockItems(data));
+            const pageItems = extractStockItems(data);
+
+            renderStock(pageItems);
             setPagination(extractPagination(data));
+
+            try {
+                renderStats(await fetchAccurateFilteredStats());
+            } catch (summaryError) {
+                console.error(summaryError);
+                renderStats(extractStats(data));
+            }
+
+            /* Always show the sum of the currently displayed stock rows. */
+            renderCurrentPageAvailableQty(pageItems);
+
             setLiveStatus('ok', 'Live: ' + liveTimeText());
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {
@@ -1190,10 +1479,7 @@ if (function_exists('csrf_token')) {
             fillSelect('category_id', data.categories || [], 'category_id', function (row) { return row.category_name || '-'; }, 'All Categories');
             fillSelect('brand_id', data.brands || [], 'brand_id', function (row) { return row.brand_name || '-'; }, 'All Brands');
 
-            renderStats(extractStats(data));
-            renderStock(extractStockItems(data));
-            setPagination(extractPagination(data));
-            setLiveStatus('ok', 'Live: ' + liveTimeText());
+            await loadStock(false);
             startAutoRefresh();
             if (window.lucide) window.lucide.createIcons();
         } catch (error) {

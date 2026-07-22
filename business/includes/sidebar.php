@@ -138,8 +138,19 @@ function sidebar_has_active_child(array $children, string $currentPage): bool
 .sidebar-nav {
     height: calc(100vh - 72px);
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: hidden;
     padding: 14px 10px 22px;
+
+    /* Hide scrollbar but keep scrolling */
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* Internet Explorer / Edge */
+}
+
+/* Chrome, Safari, Opera */
+.sidebar-nav::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 .nav-link-custom {
     width: 100%;

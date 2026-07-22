@@ -1,45 +1,64 @@
 <?php
-/*
- * Add these CSS variables/rules to includes/links.php after loading
- * website_color_settings so saved typography applies across all pages.
- *
- * Expected variables:
- * --app-font-family
- * --app-font-size
- * --app-heading-size
- * --app-font-weight
- * --app-heading-weight
- * --app-line-height
- * --app-letter-spacing
- * --app-button-transform
+/**
+ * Global Typography Loader
+ * Include this file from business/includes/links.php
+ * after the main stylesheet links.
  */
 ?>
-<style>
-:root{
-    --app-font-family:<?= e($colors['font_family'] ?? 'Inter, "Segoe UI", Arial, sans-serif') ?>;
-    --app-font-size:<?= e($colors['base_font_size'] ?? '14') ?>px;
-    --app-heading-size:<?= e($colors['heading_font_size'] ?? '24') ?>px;
-    --app-font-weight:<?= e($colors['font_weight'] ?? '500') ?>;
-    --app-heading-weight:<?= e($colors['heading_font_weight'] ?? '800') ?>;
-    --app-line-height:<?= e($colors['line_height'] ?? '1.5') ?>;
-    --app-letter-spacing:<?= e($colors['letter_spacing'] ?? '0') ?>px;
-    --app-button-transform:<?= e($colors['button_text_transform'] ?? 'none') ?>;
+<style id="global-typography-rules">
+html, body,
+button, input, select, textarea,
+table, .btn, .form-control, .form-select,
+.card, .modal, .dropdown-menu {
+    font-family: var(--app-font-family, Inter, "Segoe UI", Arial, sans-serif) !important;
 }
-body,button,input,select,textarea{
-    font-family:var(--app-font-family);
-    font-size:var(--app-font-size);
-    font-weight:var(--app-font-weight);
-    line-height:var(--app-line-height);
-    letter-spacing:var(--app-letter-spacing);
+body {
+    font-size: var(--app-font-size, 14px) !important;
+    font-weight: var(--app-font-weight, 500) !important;
+    line-height: var(--app-line-height, 1.5) !important;
+    letter-spacing: var(--app-letter-spacing, 0px) !important;
 }
-h1,h2,h3,h4,h5,h6,.page-title,.mp-card-title{
-    font-family:var(--app-font-family);
-    font-weight:var(--app-heading-weight);
+h1, h2, h3, h4, h5, h6,
+.page-title, .mp-hero h1, .mp-card-title, .modal-title {
+    font-weight: var(--app-heading-weight, 800) !important;
 }
-h1,.page-head-card h1{
-    font-size:var(--app-heading-size);
-}
-button,.btn{
-    text-transform:var(--app-button-transform);
+button, .btn, input[type="button"], input[type="submit"] {
+    text-transform: var(--app-button-transform, none) !important;
 }
 </style>
+<script>
+(function () {
+    "use strict";
+
+    const key = "gk_footwear_typography";
+    const map = {
+        font_family: "--app-font-family",
+        base_font_size: "--app-font-size",
+        heading_font_size: "--app-heading-size",
+        font_weight: "--app-font-weight",
+        heading_font_weight: "--app-heading-weight",
+        line_height: "--app-line-height",
+        letter_spacing: "--app-letter-spacing",
+        button_text_transform: "--app-button-transform"
+    };
+
+    function normalize(name, value) {
+        value = String(value ?? "").trim();
+        if (name === "base_font_size" || name === "heading_font_size" || name === "letter_spacing") {
+            return value + "px";
+        }
+        return value;
+    }
+
+    try {
+        const settings = JSON.parse(localStorage.getItem(key) || "{}");
+        Object.entries(settings).forEach(function ([name, value]) {
+            if (map[name] && value !== "") {
+                document.documentElement.style.setProperty(map[name], normalize(name, value));
+            }
+        });
+    } catch (error) {
+        console.warn("Global typography loading failed.", error);
+    }
+})();
+</script>

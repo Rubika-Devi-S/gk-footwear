@@ -9,609 +9,475 @@ require_business_login();
 require_page_access($conn, 'theme.php');
 
 $pageTitle = 'Theme';
+
+$fontOptions = [
+    'Inter, Arial, sans-serif' => 'Inter (Default)',
+    'Poppins, Arial, sans-serif' => 'Poppins',
+    'Roboto, Arial, sans-serif' => 'Roboto',
+    '"Open Sans", Arial, sans-serif' => 'Open Sans',
+    'Nunito, Arial, sans-serif' => 'Nunito',
+];
+
+
+$themePresets = [
+    'classic_blue' => [
+        'label' => 'Classic Blue',
+        'description' => 'Clean professional ERP theme',
+        'settings' => [
+            'body_bg'=>'#F4F7FC','topbar_bg'=>'#FFFFFF','topbar_text'=>'#0F172A',
+            'card_bg'=>'#FFFFFF','card_header_bg'=>'#F8FAFC','border_soft'=>'#DCE5F1',
+            'text_main'=>'#0F172A','text_muted'=>'#64748B',
+            'sidebar_bg_1'=>'#0F172A','sidebar_bg_2'=>'#1E3A8A','sidebar_bg_3'=>'#312E81',
+            'sidebar_text'=>'#E2E8F0','sidebar_active_bg_1'=>'#2563EB','sidebar_active_bg_2'=>'#7C3AED',
+            'sidebar_active_text'=>'#FFFFFF','sidebar_hover_bg'=>'rgba(255,255,255,.10)',
+            'sidebar_hover_text'=>'#FFFFFF','sidebar_submenu_bg'=>'rgba(255,255,255,.06)',
+            'brand_1'=>'#2563EB','brand_2'=>'#7C3AED','brand_text'=>'#FFFFFF',
+            'table_header_bg'=>'#EFF6FF','table_header_text'=>'#1E3A8A','table_row_hover'=>'#F8FAFF',
+            'success_color'=>'#16A34A','warning_color'=>'#F59E0B','danger_color'=>'#DC2626','info_color'=>'#0284C7',
+            'font_family'=>'Inter, Arial, sans-serif','base_font_size'=>'14','heading_font_size'=>'24',
+            'font_weight'=>'500','heading_font_weight'=>'800','line_height'=>'1.5','letter_spacing'=>'0',
+            'button_text_transform'=>'none','sidebar_style'=>'gradient','sidebar_width'=>'268',
+            'navbar_style'=>'solid','navbar_height'=>'64','card_style'=>'elevated','card_radius'=>'18',
+            'button_style'=>'rounded','button_radius'=>'12','table_style'=>'clean','table_density'=>'comfortable',
+            'layout_width'=>'fluid','content_density'=>'comfortable','page_spacing'=>'16','theme_mode'=>'light'
+        ],
+    ],
+    'emerald_business' => [
+        'label' => 'Emerald Business',
+        'description' => 'Fresh accounting and retail style',
+        'settings' => [
+            'body_bg'=>'#F0FDF4','topbar_bg'=>'#FFFFFF','topbar_text'=>'#052E16',
+            'card_bg'=>'#FFFFFF','card_header_bg'=>'#ECFDF5','border_soft'=>'#BBF7D0',
+            'text_main'=>'#14532D','text_muted'=>'#4B7A5D',
+            'sidebar_bg_1'=>'#052E16','sidebar_bg_2'=>'#14532D','sidebar_bg_3'=>'#166534',
+            'sidebar_text'=>'#DCFCE7','sidebar_active_bg_1'=>'#16A34A','sidebar_active_bg_2'=>'#059669',
+            'sidebar_active_text'=>'#FFFFFF','sidebar_hover_bg'=>'rgba(255,255,255,.10)',
+            'sidebar_hover_text'=>'#FFFFFF','sidebar_submenu_bg'=>'rgba(255,255,255,.06)',
+            'brand_1'=>'#16A34A','brand_2'=>'#059669','brand_text'=>'#FFFFFF',
+            'table_header_bg'=>'#DCFCE7','table_header_text'=>'#14532D','table_row_hover'=>'#F0FDF4',
+            'success_color'=>'#15803D','warning_color'=>'#D97706','danger_color'=>'#B91C1C','info_color'=>'#0F766E',
+            'font_family'=>'Poppins, Arial, sans-serif','base_font_size'=>'14','heading_font_size'=>'24',
+            'font_weight'=>'500','heading_font_weight'=>'800','line_height'=>'1.55','letter_spacing'=>'0',
+            'button_text_transform'=>'none','sidebar_style'=>'gradient','sidebar_width'=>'268',
+            'navbar_style'=>'glass','navbar_height'=>'64','card_style'=>'soft','card_radius'=>'20',
+            'button_style'=>'rounded','button_radius'=>'12','table_style'=>'clean','table_density'=>'comfortable',
+            'layout_width'=>'fluid','content_density'=>'comfortable','page_spacing'=>'16','theme_mode'=>'light'
+        ],
+    ],
+    'royal_purple' => [
+        'label' => 'Royal Purple',
+        'description' => 'Premium modern POS appearance',
+        'settings' => [
+            'body_bg'=>'#F5F3FF','topbar_bg'=>'#FFFFFF','topbar_text'=>'#2E1065',
+            'card_bg'=>'#FFFFFF','card_header_bg'=>'#F5F3FF','border_soft'=>'#DDD6FE',
+            'text_main'=>'#2E1065','text_muted'=>'#6D5A8A',
+            'sidebar_bg_1'=>'#2E1065','sidebar_bg_2'=>'#4C1D95','sidebar_bg_3'=>'#581C87',
+            'sidebar_text'=>'#EDE9FE','sidebar_active_bg_1'=>'#7C3AED','sidebar_active_bg_2'=>'#C026D3',
+            'sidebar_active_text'=>'#FFFFFF','sidebar_hover_bg'=>'rgba(255,255,255,.10)',
+            'sidebar_hover_text'=>'#FFFFFF','sidebar_submenu_bg'=>'rgba(255,255,255,.06)',
+            'brand_1'=>'#7C3AED','brand_2'=>'#C026D3','brand_text'=>'#FFFFFF',
+            'table_header_bg'=>'#EDE9FE','table_header_text'=>'#3B0764','table_row_hover'=>'#FAF5FF',
+            'success_color'=>'#16A34A','warning_color'=>'#D97706','danger_color'=>'#DC2626','info_color'=>'#7C3AED',
+            'font_family'=>'Nunito, Arial, sans-serif','base_font_size'=>'14','heading_font_size'=>'25',
+            'font_weight'=>'600','heading_font_weight'=>'900','line_height'=>'1.5','letter_spacing'=>'0.1',
+            'button_text_transform'=>'none','sidebar_style'=>'gradient','sidebar_width'=>'272',
+            'navbar_style'=>'floating','navbar_height'=>'68','card_style'=>'elevated','card_radius'=>'22',
+            'button_style'=>'pill','button_radius'=>'24','table_style'=>'striped','table_density'=>'comfortable',
+            'layout_width'=>'fluid','content_density'=>'comfortable','page_spacing'=>'18','theme_mode'=>'light'
+        ],
+    ],
+    'sunset_orange' => [
+        'label' => 'Sunset Orange',
+        'description' => 'Warm retail and invoice theme',
+        'settings' => [
+            'body_bg'=>'#FFF7ED','topbar_bg'=>'#FFFFFF','topbar_text'=>'#431407',
+            'card_bg'=>'#FFFFFF','card_header_bg'=>'#FFF7ED','border_soft'=>'#FED7AA',
+            'text_main'=>'#431407','text_muted'=>'#8A5A44',
+            'sidebar_bg_1'=>'#431407','sidebar_bg_2'=>'#7C2D12','sidebar_bg_3'=>'#9A3412',
+            'sidebar_text'=>'#FFEDD5','sidebar_active_bg_1'=>'#EA580C','sidebar_active_bg_2'=>'#F59E0B',
+            'sidebar_active_text'=>'#FFFFFF','sidebar_hover_bg'=>'rgba(255,255,255,.10)',
+            'sidebar_hover_text'=>'#FFFFFF','sidebar_submenu_bg'=>'rgba(255,255,255,.06)',
+            'brand_1'=>'#EA580C','brand_2'=>'#F59E0B','brand_text'=>'#FFFFFF',
+            'table_header_bg'=>'#FFEDD5','table_header_text'=>'#7C2D12','table_row_hover'=>'#FFF7ED',
+            'success_color'=>'#15803D','warning_color'=>'#EA580C','danger_color'=>'#B91C1C','info_color'=>'#0284C7',
+            'font_family'=>'"Open Sans", Arial, sans-serif','base_font_size'=>'14','heading_font_size'=>'24',
+            'font_weight'=>'500','heading_font_weight'=>'800','line_height'=>'1.5','letter_spacing'=>'0',
+            'button_text_transform'=>'capitalize','sidebar_style'=>'solid','sidebar_width'=>'264',
+            'navbar_style'=>'bordered','navbar_height'=>'64','card_style'=>'bordered','card_radius'=>'16',
+            'button_style'=>'rounded','button_radius'=>'10','table_style'=>'bordered','table_density'=>'comfortable',
+            'layout_width'=>'fluid','content_density'=>'comfortable','page_spacing'=>'16','theme_mode'=>'light'
+        ],
+    ],
+    'midnight_dark' => [
+        'label' => 'Midnight Dark',
+        'description' => 'Elegant dark billing workspace',
+        'settings' => [
+            'body_bg'=>'#020617','topbar_bg'=>'#0F172A','topbar_text'=>'#F8FAFC',
+            'card_bg'=>'#111827','card_header_bg'=>'#1E293B','border_soft'=>'#334155',
+            'text_main'=>'#F8FAFC','text_muted'=>'#94A3B8',
+            'sidebar_bg_1'=>'#020617','sidebar_bg_2'=>'#0F172A','sidebar_bg_3'=>'#111827',
+            'sidebar_text'=>'#CBD5E1','sidebar_active_bg_1'=>'#2563EB','sidebar_active_bg_2'=>'#06B6D4',
+            'sidebar_active_text'=>'#FFFFFF','sidebar_hover_bg'=>'rgba(255,255,255,.10)',
+            'sidebar_hover_text'=>'#FFFFFF','sidebar_submenu_bg'=>'rgba(255,255,255,.06)',
+            'brand_1'=>'#2563EB','brand_2'=>'#06B6D4','brand_text'=>'#FFFFFF',
+            'table_header_bg'=>'#1E293B','table_header_text'=>'#F8FAFC','table_row_hover'=>'#1E293B',
+            'success_color'=>'#22C55E','warning_color'=>'#F59E0B','danger_color'=>'#EF4444','info_color'=>'#38BDF8',
+            'font_family'=>'Roboto, Arial, sans-serif','base_font_size'=>'14','heading_font_size'=>'24',
+            'font_weight'=>'400','heading_font_weight'=>'700','line_height'=>'1.55','letter_spacing'=>'0',
+            'button_text_transform'=>'none','sidebar_style'=>'gradient','sidebar_width'=>'268',
+            'navbar_style'=>'glass','navbar_height'=>'64','card_style'=>'flat','card_radius'=>'18',
+            'button_style'=>'rounded','button_radius'=>'12','table_style'=>'clean','table_density'=>'comfortable',
+            'layout_width'=>'fluid','content_density'=>'comfortable','page_spacing'=>'16','theme_mode'=>'dark'
+        ],
+    ],
+];
+
+$sections = [
+    'Theme Color' => [
+        ['body_bg','Page Background','color'], ['topbar_bg','Navbar Background','color'],
+        ['topbar_text','Navbar Text','color'], ['card_bg','Card Background','color'],
+        ['card_header_bg','Card Header','color'], ['border_soft','Border Color','color'],
+        ['text_main','Main Text','color'], ['text_muted','Muted Text','color'],
+        ['brand_1','Primary Brand','color'], ['brand_2','Secondary Brand','color'],
+        ['brand_text','Button Text','color'], ['success_color','Success','color'],
+        ['warning_color','Warning','color'], ['danger_color','Danger','color'], ['info_color','Info','color'],
+    ],
+    'Sidebar Style' => [
+        ['sidebar_bg_1','Gradient Start','color'], ['sidebar_bg_2','Gradient Middle','color'],
+        ['sidebar_bg_3','Gradient End','color'], ['sidebar_text','Sidebar Text','color'],
+        ['sidebar_active_bg_1','Active Start','color'], ['sidebar_active_bg_2','Active End','color'],
+        ['sidebar_active_text','Active Text','color'], ['sidebar_hover_bg','Hover Background','text'],
+        ['sidebar_hover_text','Hover Text','color'], ['sidebar_submenu_bg','Submenu Background','text'],
+        ['sidebar_style','Sidebar Style','select',['gradient'=>'Gradient','solid'=>'Solid','soft'=>'Soft']],
+        ['sidebar_width','Sidebar Width','number',220,340,1],
+    ],
+    'Navbar Style' => [
+        ['navbar_style','Navbar Style','select',['solid'=>'Solid','glass'=>'Glass','bordered'=>'Bordered','floating'=>'Floating']],
+        ['navbar_height','Navbar Height','number',56,92,1],
+    ],
+    'Card Style' => [
+        ['card_style','Card Style','select',['elevated'=>'Elevated','flat'=>'Flat','bordered'=>'Bordered','soft'=>'Soft']],
+        ['card_radius','Card Radius','number',0,32,1],
+    ],
+    'Button Style' => [
+        ['button_style','Button Style','select',['rounded'=>'Rounded','pill'=>'Pill','square'=>'Square','soft'=>'Soft']],
+        ['button_radius','Button Radius','number',0,32,1],
+        ['button_text_transform','Button Text','select',['none'=>'Normal','uppercase'=>'UPPERCASE','capitalize'=>'Capitalize']],
+    ],
+    'Table Style' => [
+        ['table_header_bg','Header Background','color'], ['table_header_text','Header Text','color'],
+        ['table_row_hover','Row Hover','color'],
+        ['table_style','Table Style','select',['clean'=>'Clean','striped'=>'Striped','bordered'=>'Bordered']],
+        ['table_density','Table Density','select',['compact'=>'Compact','comfortable'=>'Comfortable','spacious'=>'Spacious']],
+    ],
+    'Layout Settings' => [
+        ['layout_width','Layout Width','select',['fluid'=>'Fluid','boxed'=>'Boxed']],
+        ['content_density','Content Density','select',['compact'=>'Compact','comfortable'=>'Comfortable','spacious'=>'Spacious']],
+        ['page_spacing','Page Spacing','number',8,40,1],
+        ['theme_mode','Light / Dark Mode','select',['light'=>'Light','dark'=>'Dark','system'=>'System']],
+    ],
+];
 ?>
 <!DOCTYPE html>
-<html lang="en" class="light">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= e($pageTitle) ?> - GK Footwear POS</title>
-    <?php include __DIR__ . '/includes/links.php'; ?>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><?= e($pageTitle) ?> - GK Footwear POS</title>
+<?php include __DIR__ . '/includes/links.php'; ?>
+<?php
+// theme-colors.php is loaded by links.php, so $colors and $defaults are now available.
+$themeDefaults = (isset($defaults) && is_array($defaults)) ? $defaults : [];
+$themeColors = (isset($colors) && is_array($colors)) ? $colors : $themeDefaults;
+$currentFont = (string)($themeColors['font_family'] ?? $themeDefaults['font_family'] ?? 'Inter, Arial, sans-serif');
+$isCustomFont = !array_key_exists($currentFont, $fontOptions);
+?>
+<style>
+
+.theme-preset-section{background:var(--card-bg);border:1px solid var(--border-soft);border-radius:var(--card-radius);box-shadow:var(--shadow-card);padding:18px;margin-bottom:18px}
+.theme-preset-grid{display:grid;grid-template-columns:repeat(5,minmax(145px,1fr));gap:12px}
+.theme-preset-card{appearance:none;text-align:left;background:var(--card-bg);border:1px solid var(--border-soft);border-radius:17px;padding:13px;cursor:pointer;color:var(--text-main);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.theme-preset-card:hover,.theme-preset-card.active{transform:translateY(-3px);border-color:var(--brand-1);box-shadow:0 14px 30px rgba(15,23,42,.13)}
+.theme-preset-swatches{display:flex;gap:6px;margin-bottom:10px}
+.theme-preset-swatches span{width:27px;height:27px;border-radius:9px;border:1px solid rgba(148,163,184,.28)}
+.theme-preset-name{font-size:13px;font-weight:900;margin-bottom:3px}
+.theme-preset-description{font-size:10px;line-height:1.35;color:var(--text-muted)}
+.theme-preset-status{display:none;margin-top:8px;font-size:10px;font-weight:900;color:var(--brand-1)}
+.theme-preset-card.active .theme-preset-status{display:block}
+
+.theme-shell{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:18px}
+.theme-toolbar,.theme-section,.preview-panel{background:var(--card-bg);border:1px solid var(--border-soft);border-radius:var(--card-radius);box-shadow:var(--shadow-card)}
+.theme-toolbar{padding:18px}.theme-section{padding:18px;margin-bottom:16px}
+.theme-title{font-size:22px;font-weight:900;margin:0}.theme-sub{color:var(--text-muted);margin:4px 0 0}
+.section-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0 0 14px}
+.control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.control-card{border:1px solid var(--border-soft);border-radius:16px;padding:12px;background:color-mix(in srgb,var(--card-bg) 94%,var(--brand-1) 6%)}
+.control-card label{display:block;font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:7px}
+.color-row{display:grid;grid-template-columns:48px 1fr;gap:8px}.color-row input[type=color]{width:48px;height:42px;padding:3px;border-radius:12px;border:1px solid var(--input-border)}
+.preview-panel{position:sticky;top:86px;padding:16px}.preview-window{overflow:hidden;border:1px solid var(--border-soft);border-radius:18px;background:var(--body-bg)}
+.preview-top{height:50px;background:var(--topbar-bg);color:var(--topbar-text);display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--border-soft)}
+.preview-body{display:grid;grid-template-columns:110px 1fr;min-height:330px}.preview-side{background:var(--sidebar-bg);padding:12px}
+.preview-nav{padding:8px;border-radius:10px;color:var(--sidebar-text);font-size:11px;margin-bottom:7px}.preview-nav.active{background:linear-gradient(135deg,var(--sidebar-active-bg-1),var(--sidebar-active-bg-2));color:var(--sidebar-active-text)}
+.preview-content{padding:14px}.preview-card{background:var(--card-bg);border:1px solid var(--border-soft);border-radius:var(--card-radius);padding:14px;box-shadow:var(--shadow-card);margin-bottom:12px}
+.preview-btn{display:inline-flex;padding:8px 13px;border-radius:var(--button-radius);background:linear-gradient(135deg,var(--brand-1),var(--brand-2));color:var(--brand-text);font-weight:800;text-transform:var(--app-button-transform)}
+.font-custom-wrap{display:none;margin-top:8px}.font-custom-wrap.show{display:block}
+@media(max-width:1199px){.theme-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.theme-shell{grid-template-columns:1fr}.preview-panel{position:static}.control-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:575px){.theme-preset-grid,.control-grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="mobileOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" style="z-index:1035;"></div>
 <?php include __DIR__ . '/includes/page-message.php'; ?>
 <div class="min-vh-100 d-flex">
-    <?php include __DIR__ . '/includes/sidebar.php'; ?>
-    <main id="main">
-        <?php include __DIR__ . '/includes/nav.php'; ?>
-        <section class="page-section p-3 p-lg-3">
-
-<?php
-$controlGroups = [
-    'Layout Colors' => [
-        ['body_bg', 'Body Background'],
-        ['topbar_bg', 'Topbar Background'],
-        ['topbar_text', 'Topbar Text'],
-        ['card_bg', 'Card Background'],
-        ['card_header_bg', 'Card Header Background'],
-        ['border_soft', 'Border Color'],
-        ['text_main', 'Main Text Color'],
-        ['text_muted', 'Muted Text Color'],
-    ],
-    'Sidebar Gradient & Colors' => [
-        ['sidebar_bg_1', 'Gradient Start'],
-        ['sidebar_bg_2', 'Gradient Middle'],
-        ['sidebar_bg_3', 'Gradient End'],
-        ['sidebar_text', 'Sidebar Text'],
-        ['sidebar_active_bg_1', 'Active BG Start'],
-        ['sidebar_active_bg_2', 'Active BG End'],
-        ['sidebar_active_text', 'Active Text'],
-        ['sidebar_hover_bg', 'Hover Background'],
-        ['sidebar_hover_text', 'Hover Text'],
-        ['sidebar_submenu_bg', 'Submenu Background'],
-    ],
-    'Brand Colors' => [
-        ['brand_1', 'Primary Brand Color'],
-        ['brand_2', 'Secondary Brand Color'],
-        ['brand_text', 'Brand Button Text'],
-    ],
-    'Table Colors' => [
-        ['table_header_bg', 'Table Header Background'],
-        ['table_header_text', 'Table Header Text'],
-        ['table_row_hover', 'Table Row Hover'],
-    ],
-    'Form Colors' => [
-        ['input_bg', 'Input Background'],
-        ['input_border', 'Input Border'],
-        ['input_text', 'Input Text'],
-    ],
-    'Status Colors' => [
-        ['success_color', 'Success Color'],
-        ['warning_color', 'Warning Color'],
-        ['danger_color', 'Danger Color'],
-        ['info_color', 'Info Color'],
-    ],
-];
-$typographyControls = [
-    ['font_family', 'Font Family', 'select'],
-    ['base_font_size', 'Base Font Size', 'number'],
-    ['heading_font_size', 'Heading Font Size', 'number'],
-    ['font_weight', 'Default Font Weight', 'select'],
-    ['heading_font_weight', 'Heading Font Weight', 'select'],
-    ['line_height', 'Line Height', 'number'],
-    ['letter_spacing', 'Letter Spacing', 'number'],
-    ['button_text_transform', 'Button Text Style', 'select'],
-];
-
-$fontFamilyOptions = [
-    'Inter, "Segoe UI", Arial, sans-serif' => 'Inter / Segoe UI',
-    '"Segoe UI", Arial, sans-serif' => 'Segoe UI',
-    'Arial, Helvetica, sans-serif' => 'Arial',
-    'Roboto, Arial, sans-serif' => 'Roboto',
-    'Poppins, Arial, sans-serif' => 'Poppins',
-    'Georgia, "Times New Roman", serif' => 'Georgia',
-];
-
-$fontWeightOptions = [
-    '400' => 'Regular (400)',
-    '500' => 'Medium (500)',
-    '600' => 'Semi Bold (600)',
-    '700' => 'Bold (700)',
-    '800' => 'Extra Bold (800)',
-    '900' => 'Black (900)',
-];
-
-$textTransformOptions = [
-    'none' => 'Normal',
-    'uppercase' => 'UPPERCASE',
-    'capitalize' => 'Capitalize',
-];
-
-$typographyDefaults = [
-    'font_family' => 'Inter, "Segoe UI", Arial, sans-serif',
-    'base_font_size' => '14',
-    'heading_font_size' => '24',
-    'font_weight' => '500',
-    'heading_font_weight' => '800',
-    'line_height' => '1.5',
-    'letter_spacing' => '0',
-    'button_text_transform' => 'none',
-];
-
-$themePresets = [
-    'classic_blue' => [
-        'label' => 'Classic Blue',
-        'colors' => [
-            'body_bg' => '#EEF3FB', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#0F172A',
-            'card_bg' => '#FFFFFF', 'card_header_bg' => '#F8FAFC', 'border_soft' => '#DBE4F0',
-            'text_main' => '#0F172A', 'text_muted' => '#64748B',
-            'sidebar_bg_1' => '#0F172A', 'sidebar_bg_2' => '#1E3A8A', 'sidebar_bg_3' => '#312E81',
-            'sidebar_text' => '#E2E8F0', 'sidebar_active_bg_1' => '#2563EB', 'sidebar_active_bg_2' => '#7C3AED',
-            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#1E293B', 'sidebar_hover_text' => '#FFFFFF',
-            'sidebar_submenu_bg' => '#172033', 'brand_1' => '#2563EB', 'brand_2' => '#7C3AED',
-            'brand_text' => '#FFFFFF', 'table_header_bg' => '#F1F5F9', 'table_header_text' => '#0F172A',
-            'table_row_hover' => '#EFF6FF', 'input_bg' => '#FFFFFF', 'input_border' => '#CBD5E1',
-            'input_text' => '#0F172A', 'success_color' => '#16A34A', 'warning_color' => '#F59E0B',
-            'danger_color' => '#DC2626', 'info_color' => '#0284C7',
-        ],
-        'typography' => ['font_family' => 'Inter, "Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.5', 'letter_spacing' => '0', 'button_text_transform' => 'none']
-    ],
-    'emerald_business' => [
-        'label' => 'Emerald Business',
-        'colors' => [
-            'body_bg' => '#F0FDF4', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#052E16',
-            'card_bg' => '#FFFFFF', 'card_header_bg' => '#ECFDF5', 'border_soft' => '#BBF7D0',
-            'text_main' => '#14532D', 'text_muted' => '#4B7A5D',
-            'sidebar_bg_1' => '#052E16', 'sidebar_bg_2' => '#14532D', 'sidebar_bg_3' => '#166534',
-            'sidebar_text' => '#DCFCE7', 'sidebar_active_bg_1' => '#16A34A', 'sidebar_active_bg_2' => '#059669',
-            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#166534', 'sidebar_hover_text' => '#FFFFFF',
-            'sidebar_submenu_bg' => '#0F3D24', 'brand_1' => '#16A34A', 'brand_2' => '#059669',
-            'brand_text' => '#FFFFFF', 'table_header_bg' => '#DCFCE7', 'table_header_text' => '#14532D',
-            'table_row_hover' => '#F0FDF4', 'input_bg' => '#FFFFFF', 'input_border' => '#86EFAC',
-            'input_text' => '#14532D', 'success_color' => '#15803D', 'warning_color' => '#D97706',
-            'danger_color' => '#B91C1C', 'info_color' => '#0F766E',
-        ],
-        'typography' => ['font_family' => 'Poppins, Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.55', 'letter_spacing' => '0', 'button_text_transform' => 'none']
-    ],
-    'royal_purple' => [
-        'label' => 'Royal Purple',
-        'colors' => [
-            'body_bg' => '#F5F3FF', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#2E1065',
-            'card_bg' => '#FFFFFF', 'card_header_bg' => '#F5F3FF', 'border_soft' => '#DDD6FE',
-            'text_main' => '#2E1065', 'text_muted' => '#6D5A8A',
-            'sidebar_bg_1' => '#2E1065', 'sidebar_bg_2' => '#4C1D95', 'sidebar_bg_3' => '#581C87',
-            'sidebar_text' => '#EDE9FE', 'sidebar_active_bg_1' => '#7C3AED', 'sidebar_active_bg_2' => '#C026D3',
-            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#4C1D95', 'sidebar_hover_text' => '#FFFFFF',
-            'sidebar_submenu_bg' => '#3B176F', 'brand_1' => '#7C3AED', 'brand_2' => '#C026D3',
-            'brand_text' => '#FFFFFF', 'table_header_bg' => '#EDE9FE', 'table_header_text' => '#3B0764',
-            'table_row_hover' => '#FAF5FF', 'input_bg' => '#FFFFFF', 'input_border' => '#C4B5FD',
-            'input_text' => '#2E1065', 'success_color' => '#16A34A', 'warning_color' => '#D97706',
-            'danger_color' => '#DC2626', 'info_color' => '#7C3AED',
-        ],
-        'typography' => ['font_family' => 'Inter, "Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '25', 'font_weight' => '500', 'heading_font_weight' => '900', 'line_height' => '1.5', 'letter_spacing' => '0.1', 'button_text_transform' => 'uppercase']
-    ],
-    'sunset_orange' => [
-        'label' => 'Sunset Orange',
-        'colors' => [
-            'body_bg' => '#FFF7ED', 'topbar_bg' => '#FFFFFF', 'topbar_text' => '#431407',
-            'card_bg' => '#FFFFFF', 'card_header_bg' => '#FFF7ED', 'border_soft' => '#FED7AA',
-            'text_main' => '#431407', 'text_muted' => '#8A5A44',
-            'sidebar_bg_1' => '#431407', 'sidebar_bg_2' => '#7C2D12', 'sidebar_bg_3' => '#9A3412',
-            'sidebar_text' => '#FFEDD5', 'sidebar_active_bg_1' => '#EA580C', 'sidebar_active_bg_2' => '#F59E0B',
-            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#7C2D12', 'sidebar_hover_text' => '#FFFFFF',
-            'sidebar_submenu_bg' => '#5A2110', 'brand_1' => '#EA580C', 'brand_2' => '#F59E0B',
-            'brand_text' => '#FFFFFF', 'table_header_bg' => '#FFEDD5', 'table_header_text' => '#7C2D12',
-            'table_row_hover' => '#FFF7ED', 'input_bg' => '#FFFFFF', 'input_border' => '#FDBA74',
-            'input_text' => '#431407', 'success_color' => '#15803D', 'warning_color' => '#EA580C',
-            'danger_color' => '#B91C1C', 'info_color' => '#0284C7',
-        ],
-        'typography' => ['font_family' => '"Segoe UI", Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '500', 'heading_font_weight' => '800', 'line_height' => '1.5', 'letter_spacing' => '0', 'button_text_transform' => 'capitalize']
-    ],
-    'midnight_dark' => [
-        'label' => 'Midnight Dark',
-        'colors' => [
-            'body_bg' => '#020617', 'topbar_bg' => '#0F172A', 'topbar_text' => '#F8FAFC',
-            'card_bg' => '#111827', 'card_header_bg' => '#1E293B', 'border_soft' => '#334155',
-            'text_main' => '#F8FAFC', 'text_muted' => '#94A3B8',
-            'sidebar_bg_1' => '#020617', 'sidebar_bg_2' => '#0F172A', 'sidebar_bg_3' => '#111827',
-            'sidebar_text' => '#CBD5E1', 'sidebar_active_bg_1' => '#2563EB', 'sidebar_active_bg_2' => '#06B6D4',
-            'sidebar_active_text' => '#FFFFFF', 'sidebar_hover_bg' => '#1E293B', 'sidebar_hover_text' => '#FFFFFF',
-            'sidebar_submenu_bg' => '#111827', 'brand_1' => '#2563EB', 'brand_2' => '#06B6D4',
-            'brand_text' => '#FFFFFF', 'table_header_bg' => '#1E293B', 'table_header_text' => '#F8FAFC',
-            'table_row_hover' => '#1E293B', 'input_bg' => '#0F172A', 'input_border' => '#475569',
-            'input_text' => '#F8FAFC', 'success_color' => '#22C55E', 'warning_color' => '#F59E0B',
-            'danger_color' => '#EF4444', 'info_color' => '#38BDF8',
-        ],
-        'typography' => ['font_family' => 'Roboto, Arial, sans-serif', 'base_font_size' => '14', 'heading_font_size' => '24', 'font_weight' => '400', 'heading_font_weight' => '700', 'line_height' => '1.55', 'letter_spacing' => '0', 'button_text_transform' => 'none']
-    ],
-];
-
-global $defaults, $colors;
-?>
-
-<style>
-.theme-preset-grid{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:10px}
-.theme-preset-card{border:1px solid var(--border-soft);background:var(--card-bg);border-radius:18px;padding:12px;cursor:pointer;transition:.18s ease;box-shadow:0 6px 18px rgba(15,23,42,.06)}
-.theme-preset-card:hover,.theme-preset-card.active{transform:translateY(-2px);border-color:var(--brand-1);box-shadow:0 14px 28px rgba(15,23,42,.12)}
-.theme-preset-swatches{display:flex;gap:5px;margin-bottom:8px}
-.theme-preset-swatches span{width:24px;height:24px;border-radius:8px;border:1px solid rgba(15,23,42,.12)}
-.theme-preset-name{font-size:12px;font-weight:900;color:var(--text-main)}
-.typography-control-card{border:1px solid var(--border-soft);background:rgba(148,163,184,.06);border-radius:18px;padding:14px;height:100%}
-.typography-control-card label{font-size:12px;font-weight:900;color:var(--text-main);margin-bottom:8px}
-.typography-control-card .form-control,.typography-control-card .form-select{min-height:42px;border-radius:14px}
-.preview-shell,.preview-shell *{font-family:var(--app-font-family,Inter,"Segoe UI",Arial,sans-serif)}
-.preview-shell{font-size:var(--app-font-size,14px);line-height:var(--app-line-height,1.5);letter-spacing:var(--app-letter-spacing,0px)}
-.preview-title{font-size:var(--app-heading-size,24px)!important;font-weight:var(--app-heading-weight,800)!important}
-.preview-content,.preview-nav-item,.preview-topbar{font-weight:var(--app-font-weight,500)}
-.preview-btn{text-transform:var(--app-button-transform,none)}
-@media(max-width:1199px){.theme-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:575px){.theme-preset-grid{grid-template-columns:1fr}}
-
-.color-section-title{font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin:0 0 12px}
-.color-control-card{border:1px solid var(--border-soft);background:rgba(148,163,184,.06);border-radius:18px;padding:14px;height:100%}
-.color-control-card label{font-size:12px;font-weight:900;color:var(--text-main);margin-bottom:8px}
-.color-input-row{display:flex;gap:8px;align-items:center}
-.color-input-row input[type=color]{width:52px!important;min-width:52px;height:42px;padding:4px;border-radius:14px;border:1px solid var(--input-border);background:var(--input-bg)}
-.color-input-row input[type=text]{height:42px;border-radius:14px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--input-text);font-size:13px;font-weight:800;text-transform:uppercase}
-.preview-shell{border:1px solid var(--border-soft);background:var(--body-bg);border-radius:20px;overflow:hidden;min-height:350px}
-.preview-topbar{height:42px;background:var(--topbar-bg);color:var(--topbar-text);border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:11px;font-weight:900}
-.preview-layout{display:grid;grid-template-columns:115px 1fr;min-height:308px}
-.preview-sidebar{background:var(--sidebar-bg);padding:12px 9px}
-.preview-logo{height:28px;width:28px;border-radius:10px;background-image:linear-gradient(135deg,var(--brand-1),var(--brand-2));margin-bottom:14px}
-.preview-nav-item{height:28px;border-radius:10px;color:var(--sidebar-text);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:800;margin-bottom:7px}
-.preview-nav-item.active{color:var(--sidebar-active-text);background-image:linear-gradient(135deg,var(--sidebar-active-bg-1),var(--sidebar-active-bg-2))}
-.preview-content{padding:12px;background:var(--body-bg)}
-.preview-card-mini{background:var(--card-bg);border:1px solid var(--border-soft);border-radius:16px;padding:12px;margin-bottom:10px}
-.preview-title{color:var(--text-main);font-size:13px;font-weight:900;margin:0 0 4px}
-.preview-muted{color:var(--text-muted);font-size:10px;margin:0}
-.preview-btn{height:30px;border-radius:12px;background-image:linear-gradient(135deg,var(--brand-1),var(--brand-2));color:var(--brand-text);display:inline-flex;align-items:center;padding:0 12px;font-size:11px;font-weight:800;margin-top:8px}
-@media(max-width:1199px){.live-preview-card{position:static!important}}
-</style>
-
-<div class="page-head-card mb-3">
-    <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
-        <div>
-            <h1 class="h4 fw-bold mb-1">Theme</h1>
-            <p class="text-muted-custom mb-0 small">Update GK Footwear business panel colors. Preview live before saving.</p>
-        </div>
-        <div class="d-flex gap-2">
-            <button type="button" id="resetPreviewBtn" class="btn btn-outline-secondary rounded-4 fw-bold btn-sm px-3">Reset Preview</button>
-            <button type="button" id="savePreviewBtn" class="btn brand-gradient rounded-4 fw-bold btn-sm px-3">Save All Settings</button>
-        </div>
-    </div>
+<?php include __DIR__ . '/includes/sidebar.php'; ?>
+<main id="main">
+<?php include __DIR__ . '/includes/nav.php'; ?>
+<section class="page-section">
+<div class="theme-toolbar mb-3 d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+<div><h1 class="theme-title">Professional Theme Settings</h1><p class="theme-sub">Configure colors, typography and component styles for the entire billing application.</p></div>
+<div class="d-flex gap-2"><button type="button" id="resetBtn" class="btn btn-outline-secondary">Reset to Default</button><button type="button" id="saveBtn" class="btn brand-gradient"><span class="spinner-border spinner-border-sm me-2 save-spinner" aria-hidden="true"></span><span class="save-label">Save All Settings</span></button></div>
 </div>
 
-<section class="card-ui p-3 p-lg-4 mb-3">
-    <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
-        <div>
-            <h2 class="fw-bold fs-6 mb-1">Default Themes</h2>
-            <p class="text-muted-custom small mb-0">Choose a ready-made theme, preview it, then save.</p>
-        </div>
-    </div>
-    <div class="theme-preset-grid" id="themePresetGrid">
-        <?php foreach ($themePresets as $presetKey => $preset): ?>
-            <button type="button" class="theme-preset-card text-start" data-theme-preset="<?= e($presetKey) ?>">
-                <div class="theme-preset-swatches">
-                    <span style="background:<?= e($preset['colors']['brand_1']) ?>"></span>
-                    <span style="background:<?= e($preset['colors']['brand_2']) ?>"></span>
-                    <span style="background:<?= e($preset['colors']['body_bg']) ?>"></span>
-                    <span style="background:<?= e($preset['colors']['sidebar_bg_2']) ?>"></span>
-                </div>
-                <div class="theme-preset-name"><?= e($preset['label']) ?></div>
-            </button>
-        <?php endforeach; ?>
-    </div>
+
+<section class="theme-preset-section">
+<div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
+<div>
+<h2 class="section-title mb-1">Default Themes</h2>
+<p class="theme-sub mb-0">Select one of the five professional themes, preview it instantly, and click Save All Settings.</p>
+</div>
+</div>
+<div class="theme-preset-grid" id="themePresetGrid">
+<?php foreach ($themePresets as $presetKey => $preset): ?>
+<?php $presetSettings = $preset['settings']; ?>
+<button type="button" class="theme-preset-card" data-theme-preset="<?= e($presetKey) ?>">
+<div class="theme-preset-swatches">
+<span style="background:<?= e($presetSettings['brand_1']) ?>"></span>
+<span style="background:<?= e($presetSettings['brand_2']) ?>"></span>
+<span style="background:<?= e($presetSettings['body_bg']) ?>"></span>
+<span style="background:<?= e($presetSettings['sidebar_bg_2']) ?>"></span>
+</div>
+<div class="theme-preset-name"><?= e($preset['label']) ?></div>
+<div class="theme-preset-description"><?= e($preset['description']) ?></div>
+<div class="theme-preset-status">PREVIEW APPLIED</div>
+</button>
+<?php endforeach; ?>
+</div>
 </section>
 
-<div class="row g-3">
-    <div class="col-12 col-xl-8">
-        <form id="themeForm" class="card-ui p-3 p-lg-4">
-            <?= csrf_field(); ?>
+<div class="theme-shell">
+<div>
+<form id="themeForm">
+<?= csrf_field(); ?>
+<section class="theme-section">
+<h2 class="section-title">Typography & Text Controls</h2>
+<div class="control-grid">
+<div class="control-card">
+<label>Font Family</label>
+<select class="form-select js-theme" id="fontFamilyChoice">
+<?php foreach($fontOptions as $value=>$label): ?><option value="<?=e($value)?>" <?=(!$isCustomFont && $currentFont===$value)?'selected':''?>><?=e($label)?></option><?php endforeach; ?>
+<option value="__custom__" <?=$isCustomFont?'selected':''?>>Custom Font Family</option>
+</select>
+<div class="font-custom-wrap <?=$isCustomFont?'show':''?>" id="customFontWrap"><input type="text" class="form-control mt-2" id="customFontFamily" placeholder='Example: "Aptos", Arial, sans-serif' value="<?=$isCustomFont?e($currentFont):''?>"></div>
+<input type="hidden" name="font_family" id="font_family" value="<?=e($currentFont)?>">
+</div>
+<?php
+$typography = [
+ ['base_font_size','Base Font Size',10,24,1],['heading_font_size','Heading Font Size',14,48,1],
+ ['font_weight','Default Font Weight',400,900,100],['heading_font_weight','Heading Weight',400,900,100],
+ ['line_height','Line Height',1,2.5,.1],['letter_spacing','Letter Spacing',-2,5,.1]
+];
+foreach($typography as [$n,$l,$min,$max,$step]): ?>
+<div class="control-card"><label><?=$l?></label><input type="number" class="form-control js-theme" name="<?=$n?>" value="<?=e($themeColors[$n] ?? $themeDefaults[$n] ?? '')?>" min="<?=$min?>" max="<?=$max?>" step="<?=$step?>"></div>
+<?php endforeach; ?>
+</div>
+</section>
 
-            <?php foreach ($controlGroups as $groupTitle => $controls): ?>
-                <p class="color-section-title"><?= e($groupTitle) ?></p>
-                <div class="row g-3 mb-4">
-                    <?php foreach ($controls as [$name, $label]): ?>
-                        <div class="col-md-6 col-lg-4">
-                            <div class="color-control-card">
-                                <label><?= e($label) ?></label>
-                                <div class="color-input-row">
-                                    <input type="color" name="<?= e($name) ?>" value="<?= e($colors[$name] ?? $defaults[$name] ?? '#FFFFFF') ?>">
-                                    <input type="text" class="form-control live-color-text" data-color-name="<?= e($name) ?>" value="<?= e($colors[$name] ?? $defaults[$name] ?? '#FFFFFF') ?>">
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endforeach; ?>
-
-            <p class="color-section-title">Typography & Text Controls</p>
-            <div class="row g-3 mb-2">
-                <?php foreach ($typographyControls as [$name, $label, $type]): ?>
-                    <div class="col-md-6 col-lg-4">
-                        <div class="typography-control-card">
-                            <label for="<?= e($name) ?>"><?= e($label) ?></label>
-
-                            <?php if ($name === 'font_family'): ?>
-                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
-                                    <?php $current = $colors[$name] ?? $typographyDefaults[$name]; ?>
-                                    <?php foreach ($fontFamilyOptions as $value => $optionLabel): ?>
-                                        <option value="<?= e($value) ?>" <?= $current === $value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            <?php elseif ($name === 'font_weight' || $name === 'heading_font_weight'): ?>
-                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
-                                    <?php $current = (string)($colors[$name] ?? $typographyDefaults[$name]); ?>
-                                    <?php foreach ($fontWeightOptions as $value => $optionLabel): ?>
-                                        <option value="<?= e($value) ?>" <?= $current === (string)$value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            <?php elseif ($name === 'button_text_transform'): ?>
-                                <select class="form-select live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>">
-                                    <?php $current = $colors[$name] ?? $typographyDefaults[$name]; ?>
-                                    <?php foreach ($textTransformOptions as $value => $optionLabel): ?>
-                                        <option value="<?= e($value) ?>" <?= $current === $value ? 'selected' : '' ?>><?= e($optionLabel) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            <?php else: ?>
-                                <?php
-                                $step = in_array($name, ['line_height', 'letter_spacing'], true) ? '0.1' : '1';
-                                $min = $name === 'base_font_size' ? '10' : ($name === 'heading_font_size' ? '14' : ($name === 'line_height' ? '1' : '-2'));
-                                $max = $name === 'base_font_size' ? '24' : ($name === 'heading_font_size' ? '48' : ($name === 'line_height' ? '2.5' : '5'));
-                                ?>
-                                <input type="number" class="form-control live-typography" name="<?= e($name) ?>" id="<?= e($name) ?>"
-                                       value="<?= e($colors[$name] ?? $typographyDefaults[$name]) ?>"
-                                       min="<?= e($min) ?>" max="<?= e($max) ?>" step="<?= e($step) ?>">
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-
-            <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-3">
-                <button type="button" id="resetTypographyBtn" class="btn btn-outline-secondary rounded-4 fw-bold px-3">
-                    Reset Typography
-                </button>
-                <button type="button" id="saveTypographyBtn" class="btn brand-gradient rounded-4 fw-bold px-4">
-                    Save Typography
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <div class="col-12 col-xl-4">
-        <section class="card-ui p-3 p-lg-4 live-preview-card" style="position:sticky;top:84px;">
-            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
-                <div>
-                    <h2 class="fw-bold fs-6 mb-1">Live Preview</h2>
-                    <p class="text-muted-custom small mb-0">Preview updates instantly.</p>
-                </div>
-                <span class="badge text-bg-success rounded-pill">Live</span>
-            </div>
-
-            <div class="preview-shell">
-                <div class="preview-topbar"><span>GK Footwear</span><span class="ms-auto">POS</span></div>
-                <div class="preview-layout">
-                    <div class="preview-sidebar">
-                        <div class="preview-logo"></div>
-                        <div class="preview-nav-item active">Dashboard</div>
-                        <div class="preview-nav-item">Billing</div>
-                        <div class="preview-nav-item">Stock</div>
-                    </div>
-                    <div class="preview-content">
-                        <div class="preview-card-mini">
-                            <p class="preview-title">Billing Card</p>
-                            <p class="preview-muted">Bill of Supply, stock and cashier preview.</p>
-                            <span class="preview-btn">Create Bill</span>
-                        </div>
-                        <div class="preview-card-mini">
-                            <p class="preview-title">Table Preview</p>
-                            <p class="preview-muted">Business records and mobile cards.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </div>
+<?php foreach($sections as $title=>$controls): ?>
+<section class="theme-section"><h2 class="section-title"><?=e($title)?></h2><div class="control-grid">
+<?php foreach($controls as $c): $name=$c[0];$label=$c[1];$type=$c[2];$value=$themeColors[$name] ?? $themeDefaults[$name] ?? ''; ?>
+<div class="control-card"><label><?=e($label)?></label>
+<?php if ($type === 'color'): ?>
+<div class="color-row">
+    <input type="color" class="js-color" name="<?= e($name) ?>" value="<?= e($value) ?>">
+    <input type="text" class="form-control js-color-text" data-name="<?= e($name) ?>" value="<?= e($value) ?>">
+</div>
+<?php elseif ($type === 'select'): ?>
+<select class="form-select js-theme" name="<?= e($name) ?>">
+    <?php foreach (($c[3] ?? []) as $v => $t): ?>
+        <option value="<?= e($v) ?>" <?= ((string)$value === (string)$v) ? 'selected' : '' ?>><?= e($t) ?></option>
+    <?php endforeach; ?>
+</select>
+<?php elseif ($type === 'text'): ?>
+<input type="text" class="form-control js-theme" name="<?= e($name) ?>" value="<?= e($value) ?>">
+<?php else: ?>
+<?php
+    $minValue = $c[3] ?? 0;
+    $maxValue = $c[4] ?? 999;
+    $stepValue = $c[5] ?? 1;
+?>
+<input type="number" class="form-control js-theme" name="<?= e($name) ?>" value="<?= e($value) ?>"
+       min="<?= e((string)$minValue) ?>" max="<?= e((string)$maxValue) ?>" step="<?= e((string)$stepValue) ?>">
+<?php endif; ?></div>
+<?php endforeach; ?>
+</div></section>
+<?php endforeach; ?>
+</form>
 </div>
 
+<aside class="preview-panel"><h2 class="section-title">Live Preview</h2>
+<div class="preview-window">
+<div class="preview-top"><strong>GK Footwear POS</strong><span class="ms-auto">Admin</span></div>
+<div class="preview-body"><div class="preview-side"><div class="preview-nav active">Dashboard</div><div class="preview-nav">Billing</div><div class="preview-nav">Stock</div><div class="preview-nav">Reports</div></div>
+<div class="preview-content"><div class="preview-card"><h3 style="margin:0 0 5px">Billing Dashboard</h3><p style="color:var(--text-muted)">Live preview of your application theme.</p><span class="preview-btn">Create Bill</span></div>
+<div class="preview-card"><table class="table mb-0"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody><tr><td>Footwear</td><td>12</td></tr></tbody></table></div></div></div>
+</div></aside>
+</div>
+<?php include __DIR__ . '/includes/footer.php'; ?>
+</section></main></div>
+<?php include __DIR__ . '/includes/script.php'; ?>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const root = document.documentElement;
-    const defaults = <?= json_encode($defaults, JSON_UNESCAPED_SLASHES) ?>;
-    const typographyDefaults = <?= json_encode($typographyDefaults, JSON_UNESCAPED_SLASHES) ?>;
-    const themePresets = <?= json_encode($themePresets, JSON_UNESCAPED_SLASHES) ?>;
-    const colorMap = {
-        body_bg:"--body-bg", topbar_bg:"--topbar-bg", topbar_text:"--topbar-text", card_bg:"--card-bg",
-        card_header_bg:"--card-header-bg", border_soft:"--border-soft", text_main:"--text-main", text_muted:"--text-muted",
-        sidebar_bg_1:"--sidebar-bg-1", sidebar_bg_2:"--sidebar-bg-2", sidebar_bg_3:"--sidebar-bg-3", sidebar_text:"--sidebar-text",
-        sidebar_active_bg_1:"--sidebar-active-bg-1", sidebar_active_bg_2:"--sidebar-active-bg-2", sidebar_active_text:"--sidebar-active-text",
-        sidebar_hover_bg:"--sidebar-hover-bg", sidebar_hover_text:"--sidebar-hover-text", sidebar_submenu_bg:"--sidebar-submenu-bg",
-        brand_1:"--brand-1", brand_2:"--brand-2", brand_text:"--brand-text",
-        table_header_bg:"--table-header-bg", table_header_text:"--table-header-text", table_row_hover:"--table-row-hover",
-        input_bg:"--input-bg", input_border:"--input-border", input_text:"--input-text",
-        success_color:"--success-color", warning_color:"--warning-color", danger_color:"--danger-color", info_color:"--info-color"
-    };
-    const typographyMap = {
-        font_family: "--app-font-family",
-        base_font_size: "--app-font-size",
-        heading_font_size: "--app-heading-size",
-        font_weight: "--app-font-weight",
-        heading_font_weight: "--app-heading-weight",
-        line_height: "--app-line-height",
-        letter_spacing: "--app-letter-spacing",
-        button_text_transform: "--app-button-transform"
-    };
+document.addEventListener('DOMContentLoaded',()=>{
+ const root=document.documentElement, form=document.getElementById('themeForm');
+ const themePresets=<?= json_encode($themePresets, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+ const map={body_bg:'--body-bg',topbar_bg:'--topbar-bg',topbar_text:'--topbar-text',card_bg:'--card-bg',card_header_bg:'--card-header-bg',border_soft:'--border-soft',text_main:'--text-main',text_muted:'--text-muted',sidebar_bg_1:'--sidebar-bg-1',sidebar_bg_2:'--sidebar-bg-2',sidebar_bg_3:'--sidebar-bg-3',sidebar_text:'--sidebar-text',sidebar_active_bg_1:'--sidebar-active-bg-1',sidebar_active_bg_2:'--sidebar-active-bg-2',sidebar_active_text:'--sidebar-active-text',sidebar_hover_bg:'--sidebar-hover-bg',sidebar_hover_text:'--sidebar-hover-text',sidebar_submenu_bg:'--sidebar-submenu-bg',brand_1:'--brand-1',brand_2:'--brand-2',brand_text:'--brand-text',table_header_bg:'--table-header-bg',table_header_text:'--table-header-text',table_row_hover:'--table-row-hover',success_color:'--success-color',warning_color:'--warning-color',danger_color:'--danger-color',info_color:'--info-color',font_family:'--app-font-family',base_font_size:'--app-font-size',heading_font_size:'--app-heading-size',font_weight:'--app-font-weight',heading_font_weight:'--app-heading-weight',line_height:'--app-line-height',letter_spacing:'--app-letter-spacing',button_text_transform:'--app-button-transform',card_radius:'--card-radius',button_radius:'--button-radius',sidebar_width:'--sidebar-width',navbar_height:'--navbar-height',page_spacing:'--page-spacing'};
+ const unit=n=>['base_font_size','heading_font_size','letter_spacing','card_radius','button_radius','sidebar_width','navbar_height','page_spacing'].includes(n)?'px':'';
+ function apply(n,v){if(map[n])root.style.setProperty(map[n],v+unit(n));if(n==='sidebar_bg_1'||n==='sidebar_bg_2'||n==='sidebar_bg_3')root.style.setProperty('--sidebar-bg','linear-gradient(180deg,var(--sidebar-bg-1),var(--sidebar-bg-2),var(--sidebar-bg-3))');if(['theme_mode','sidebar_style','navbar_style','card_style','button_style','table_style','table_density','layout_width','content_density'].includes(n))root.dataset[n.replaceAll('_','-')]=v}
+ const choice=document.getElementById('fontFamilyChoice'),custom=document.getElementById('customFontFamily'),hidden=document.getElementById('font_family'),wrap=document.getElementById('customFontWrap');
 
-    function normalizeTypographyValue(name, value) {
-        value = String(value ?? "").trim();
-        if (name === "base_font_size" || name === "heading_font_size") return value + "px";
-        if (name === "letter_spacing") return value + "px";
-        return value;
-    }
+ function setThemeControl(name,value){
+  value=String(value ?? '');
+  if(name==='font_family'){
+   const available=[...choice.options].some(o=>o.value===value);
+   choice.value=available?value:'__custom__';
+   if(!available)custom.value=value;
+   hidden.value=value;
+   wrap.classList.toggle('show',!available);
+   apply(name,value);
+   return;
+  }
+  const control=form.querySelector(`[name="${name}"]`);
+  if(control){
+   control.value=value;
+   if(control.classList.contains('js-color')){
+    const textInput=form.querySelector(`[data-name="${name}"]`);
+    if(textInput)textInput.value=value;
+   }
+  }
+  apply(name,value);
+ }
+ function applyPreset(presetKey){
+  const preset=themePresets[presetKey];
+  if(!preset||!preset.settings)return;
+  Object.entries(preset.settings).forEach(([name,value])=>setThemeControl(name,value));
+  document.querySelectorAll('[data-theme-preset]').forEach(b=>b.classList.toggle('active',b.dataset.themePreset===presetKey));
+  if(window.showThemeToast)showThemeToast('success','Theme Applied',(preset.label||'Theme')+' preview applied. Click Save All Settings to keep it.');
+ }
+ document.querySelectorAll('[data-theme-preset]').forEach(button=>button.addEventListener('click',()=>applyPreset(button.dataset.themePreset)));
 
-    function applyTypography(name, value) {
-        const variable = typographyMap[name];
-        if (!variable) return;
-        root.style.setProperty(variable, normalizeTypographyValue(name, value));
-    }
+ document.querySelectorAll('.js-color').forEach(i=>i.addEventListener('input',()=>{apply(i.name,i.value);document.querySelector(`[data-name="${i.name}"]`).value=i.value}));
+ document.querySelectorAll('.js-color-text').forEach(i=>i.addEventListener('input',()=>{if(/^#[0-9a-f]{6}$/i.test(i.value)){document.querySelector(`[name="${i.dataset.name}"]`).value=i.value;apply(i.dataset.name,i.value)}}));
+ document.querySelectorAll('.js-theme').forEach(i=>i.addEventListener('input',()=>apply(i.name,i.value)));
 
-    function applyPreset(presetKey) {
-        const preset = themePresets[presetKey];
-        if (!preset) return;
+ function fontChanged(){const isCustom=choice.value==='__custom__';wrap.classList.toggle('show',isCustom);hidden.value=isCustom?custom.value:choice.value;apply('font_family',hidden.value)}
+ choice.addEventListener('change',fontChanged);custom.addEventListener('input',fontChanged);
 
-        Object.entries(preset.colors || {}).forEach(([name, value]) => {
-            applyColor(name, value);
-            const color = document.querySelector(`#themeForm input[type="color"][name="${name}"]`);
-            const text = document.querySelector(`[data-color-name="${name}"]`);
-            if (color && isHex(value)) color.value = value;
-            if (text) text.value = value;
-        });
 
-        Object.entries(preset.typography || {}).forEach(([name, value]) => {
-            applyTypography(name, value);
-            const input = document.querySelector(`#themeForm [name="${name}"]`);
-            if (input) input.value = value;
-        });
+ function formSnapshot(){
+  fontChanged();
+  const values={};
+  new FormData(form).forEach((value,key)=>{
+   if(key!=='csrf_token' && key!=='_token') values[key]=String(value);
+  });
+  return values;
+ }
 
-        document.querySelectorAll("[data-theme-preset]").forEach(btn => btn.classList.remove("active"));
-        document.querySelector(`[data-theme-preset="${presetKey}"]`)?.classList.add("active");
-        showThemeToast("success", "Theme Applied", (preset.label || "Theme") + " preview applied.");
-    }
+ let lastSavedSnapshot=formSnapshot();
+ let saveInProgress=false;
 
-    function applyColor(name, value) {
-        const variable = colorMap[name];
-        if (!variable) return;
-        root.style.setProperty(variable, value);
-        if (["sidebar_bg_1","sidebar_bg_2","sidebar_bg_3"].includes(name)) {
-            root.style.setProperty("--sidebar-bg", `linear-gradient(180deg, ${root.style.getPropertyValue("--sidebar-bg-1") || getComputedStyle(root).getPropertyValue("--sidebar-bg-1")}, ${root.style.getPropertyValue("--sidebar-bg-2") || getComputedStyle(root).getPropertyValue("--sidebar-bg-2")}, ${root.style.getPropertyValue("--sidebar-bg-3") || getComputedStyle(root).getPropertyValue("--sidebar-bg-3")})`);
-        }
-    }
+ function notify(type,title,message){
+  if(window.showThemeToast){
+   showThemeToast(type,title,message);
+  }else{
+   alert(message);
+  }
+ }
 
-    function isHex(value) {
-        return /^#[0-9A-Fa-f]{6}$/.test(String(value || "").trim());
-    }
+ async function save(){
+  if(saveInProgress)return;
 
-    document.querySelectorAll('#themeForm input[type="color"]').forEach(input => {
-        input.addEventListener("input", function () {
-            const name = this.name;
-            const value = this.value.toUpperCase();
-            applyColor(name, value);
-            const text = document.querySelector(`[data-color-name="${name}"]`);
-            if (text) text.value = value;
-        });
-    });
+  fontChanged();
+  const current=formSnapshot();
+  const changed={};
 
-    document.querySelectorAll(".live-color-text").forEach(input => {
-        input.addEventListener("input", function () {
-            let value = this.value.trim().toUpperCase();
-            if (value && !value.startsWith("#")) value = "#" + value;
-            if (isHex(value)) {
-                const name = this.dataset.colorName;
-                applyColor(name, value);
-                const color = document.querySelector(`#themeForm input[type="color"][name="${name}"]`);
-                if (color) color.value = value;
-            }
-        });
-    });
+  Object.entries(current).forEach(([key,value])=>{
+   if(String(lastSavedSnapshot[key] ?? '')!==String(value)) changed[key]=value;
+  });
 
-    document.querySelectorAll("[data-theme-preset]").forEach(button => {
-        button.addEventListener("click", function () {
-            applyPreset(this.dataset.themePreset);
-        });
-    });
+  if(Object.keys(changed).length===0){
+   notify('info','No Changes','All theme settings are already saved.');
+   return;
+  }
 
-    document.querySelectorAll(".live-typography").forEach(input => {
-        input.addEventListener("input", function () {
-            applyTypography(this.name, this.value);
-        });
-        input.addEventListener("change", function () {
-            applyTypography(this.name, this.value);
-        });
-        applyTypography(input.name, input.value);
-    });
+  const fd=new FormData();
+  const csrf=form.querySelector('input[name="csrf_token"],input[name="_token"]');
+  if(csrf && csrf.name)fd.append(csrf.name,csrf.value);
+  Object.entries(changed).forEach(([key,value])=>fd.append(key,value));
+  fd.append('save_scope','all');
 
-    document.getElementById("resetPreviewBtn").addEventListener("click", function () {
-        Object.keys(defaults).forEach(name => {
-            const value = defaults[name];
-            applyColor(name, value);
-            const color = document.querySelector(`#themeForm input[type="color"][name="${name}"]`);
-            const text = document.querySelector(`[data-color-name="${name}"]`);
-            if (color && isHex(value)) color.value = value;
-            if (text) text.value = value;
-        });
-        Object.keys(typographyDefaults).forEach(name => {
-            const value = typographyDefaults[name];
-            applyTypography(name, value);
-            const input = document.querySelector(`#themeForm [name="${name}"]`);
-            if (input) input.value = value;
-        });
-        document.querySelectorAll("[data-theme-preset]").forEach(btn => btn.classList.remove("active"));
-        showThemeToast("info", "Preview Reset", "Theme preview reset to default colors and typography.");
-    });
+  const btn=document.getElementById('saveBtn');
+  const controller=new AbortController();
+  const timeoutId=setTimeout(()=>controller.abort(),15000);
 
-    async function saveThemeForm(formData, successFallback) {
-        try {
-            const res = await fetch("api/theme-api.php", {
-                method: "POST",
-                body: formData
-            });
+  saveInProgress=true;
+  btn.disabled=true;
+  btn.classList.add('is-saving');
+  btn.setAttribute('aria-busy','true');
 
-            const data = await res.json();
+  try{
+   const response=await fetch('api/theme-api.php',{
+    method:'POST',
+    credentials:'same-origin',
+    cache:'no-store',
+    headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},
+    body:fd,
+    signal:controller.signal
+   });
 
-            if (data.ok) {
-                showThemeToast("success", "Saved", data.message || successFallback);
-                return true;
-            }
+   const raw=await response.text();
+   let data;
+   try{
+    data=JSON.parse(raw);
+   }catch(parseError){
+    throw new Error(raw.trim()||'Invalid server response.');
+   }
 
-            showThemeToast("error", "Failed", data.message || "Unable to save theme settings.");
-            return false;
-        } catch (error) {
-            showThemeToast("error", "Failed", "Unable to connect to server.");
-            return false;
-        }
-    }
+   if(!response.ok || !data.ok){
+    throw new Error(data.message||'Unable to save theme settings.');
+   }
 
-    document.getElementById("saveTypographyBtn")?.addEventListener("click", async function () {
-        const form = document.getElementById("themeForm");
-        const fd = new FormData();
+   lastSavedSnapshot={...current};
 
-        const csrfInput = form.querySelector('input[name="csrf_token"], input[name="_token"], input[type="hidden"]');
-        if (csrfInput && csrfInput.name) {
-            fd.append(csrfInput.name, csrfInput.value);
-        }
+   if(window.GKTheme && typeof window.GKTheme.broadcastSettings==='function'){
+    window.GKTheme.broadcastSettings(current);
+   }
 
-        document.querySelectorAll("#themeForm .live-typography").forEach(input => {
-            fd.append(input.name, input.value);
-        });
-
-        fd.append("save_scope", "typography");
-
-        const button = this;
-        const originalText = button.textContent;
-        button.disabled = true;
-        button.textContent = "Saving...";
-
-        await saveThemeForm(fd, "Typography settings saved successfully.");
-
-        button.disabled = false;
-        button.textContent = originalText;
-    });
-
-    document.getElementById("resetTypographyBtn")?.addEventListener("click", function () {
-        Object.keys(typographyDefaults).forEach(name => {
-            const value = typographyDefaults[name];
-            applyTypography(name, value);
-            const input = document.querySelector(`#themeForm [name="${name}"]`);
-            if (input) input.value = value;
-        });
-
-        showThemeToast("info", "Typography Reset", "Typography preview reset to default values.");
-    });
-
-    document.getElementById("savePreviewBtn").addEventListener("click", async function () {
-        const form = document.getElementById("themeForm");
-        const fd = new FormData(form);
-        fd.append("save_scope", "all");
-
-        const button = this;
-        const originalText = button.textContent;
-        button.disabled = true;
-        button.textContent = "Saving...";
-
-        await saveThemeForm(fd, "Theme colors and typography saved successfully.");
-
-        button.disabled = false;
-        button.textContent = originalText;
-    });
+   const timing=data.duration_ms?` (${data.duration_ms} ms)`:'';
+   notify('success','Settings Saved',(data.message||'Theme settings saved successfully.')+timing);
+  }catch(error){
+   const message=error.name==='AbortError'
+    ? 'The server took too long to respond. Please try again.'
+    : (error.message||'Unable to save theme settings.');
+   notify('error','Save Failed',message);
+  }finally{
+   clearTimeout(timeoutId);
+   saveInProgress=false;
+   btn.disabled=false;
+   btn.classList.remove('is-saving');
+   btn.removeAttribute('aria-busy');
+  }
+ }
+ document.getElementById('saveBtn').addEventListener('click',save);
+ document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('Reset all theme settings to default?')){const fd=new FormData(form);fd.append('action','reset');fd.append('save_scope','all');fetch('api/theme-api.php',{method:'POST',body:fd,credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d.ok)location.reload();else alert(d.message)})}});
 });
 </script>
-
-            <?php include __DIR__ . '/includes/footer.php'; ?>
-        </section>
-    </main>
-</div>
-<?php include __DIR__ . '/includes/script.php'; ?>
-</body>
-</html>
+</body></html>

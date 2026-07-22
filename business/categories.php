@@ -102,24 +102,46 @@ if (table_exists($conn, 'brands')) {
     mysqli_stmt_close($stmt);
 }
 
+$brandsByCategory = [];
 $brandCounts = [];
-if (table_exists($conn, 'brands') && table_has_column($conn, 'brands', 'category_id')) {
+
+if (table_exists($conn, 'brand_category_map')) {
     $stmt = mysqli_prepare($conn, "
-        SELECT category_id, COUNT(*) AS total
-        FROM brands
-        WHERE business_id = ?
-          AND category_id IS NOT NULL
-        GROUP BY category_id
+        SELECT
+            bcm.category_id,
+            b.brand_id,
+            b.brand_name,
+            b.status
+        FROM brand_category_map bcm
+        INNER JOIN brands b
+            ON b.brand_id = bcm.brand_id
+           AND b.business_id = bcm.business_id
+        WHERE bcm.business_id = ?
+        ORDER BY b.brand_name ASC
     ");
     mysqli_stmt_bind_param($stmt, 'i', $businessId);
     mysqli_stmt_execute($stmt);
     $rs = mysqli_stmt_get_result($stmt);
 
     while ($row = mysqli_fetch_assoc($rs)) {
-        $brandCounts[(int)$row['category_id']] = (int)$row['total'];
+        $categoryId = (int)$row['category_id'];
+
+        if (!isset($brandsByCategory[$categoryId])) {
+            $brandsByCategory[$categoryId] = [];
+        }
+
+        $brandsByCategory[$categoryId][] = [
+            'brand_id' => (int)$row['brand_id'],
+            'brand_name' => (string)$row['brand_name'],
+            'status' => (int)$row['status'],
+        ];
     }
 
     mysqli_stmt_close($stmt);
+
+    foreach ($brandsByCategory as $categoryId => $mappedBrands) {
+        $brandCounts[(int)$categoryId] = count($mappedBrands);
+    }
 }
 
 $categories = [];
@@ -336,6 +358,70 @@ mysqli_stmt_close($stmt);
         color: #6d28d9;
     }
 
+    .brand-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        max-width: 440px;
+    }
+
+    .brand-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 4px 7px;
+        font-size: 9.5px;
+        font-weight: 750;
+        background: #e0f2fe;
+        color: #075985;
+        border: 1px solid #bae6fd;
+        line-height: 1;
+    }
+
+    .brand-chip.inactive {
+        background: #f1f5f9;
+        color: #64748b;
+        border-color: #cbd5e1;
+    }
+
+    .brand-empty {
+        font-size: 10px;
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .brand-count-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .brand-view-modal-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+
+    .brand-view-modal-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 11px;
+        font-weight: 750;
+        background: #e0f2fe;
+        color: #075985;
+        border: 1px solid #bae6fd;
+    }
+
+    .brand-view-modal-item.inactive {
+        background: #f1f5f9;
+        color: #64748b;
+        border-color: #cbd5e1;
+    }
+
     .mp-action-btn {
         border-radius: 999px;
         font-size: 10.5px;
@@ -543,7 +629,12 @@ mysqli_stmt_close($stmt);
                                             </div>
                                         </div>
                                     </td>
-                                    <td><span class="mp-badge badge-count"><?= (int)$brandCount ?> brands</span></td>
+                                    <td>
+                                        <?php $mappedBrands = $brandsByCategory[$categoryId] ?? []; ?>
+                                        <span class="mp-badge badge-count">
+                                            <?= count($mappedBrands) ?> brand<?= count($mappedBrands) === 1 ? '' : 's' ?>
+                                        </span>
+                                    </td>
                                     <td>
                                         <?php if ((int)$category['status'] === 1): ?>
                                         <span class="mp-badge status-active">Active</span>
@@ -556,6 +647,19 @@ mysqli_stmt_close($stmt);
 
                                     <?php if ($permissions['can_edit'] || $permissions['can_delete']): ?>
                                     <td>
+                                        <?php $mappedBrands = $brandsByCategory[$categoryId] ?? []; ?>
+
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info mp-action-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#viewBrandsModal"
+                                                onclick='viewCategoryBrands(
+                                                    <?= json_encode($category['category_name'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                                                    <?= json_encode($mappedBrands, JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+                                                )'>
+                                            View
+                                        </button>
+
                                         <?php if ($permissions['can_edit']): ?>
                                         <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn"
                                             data-bs-toggle="modal" data-bs-target="#categoryModal"
@@ -618,11 +722,27 @@ mysqli_stmt_close($stmt);
                                     </div>
 
                                     <div class="d-flex flex-wrap gap-2 mt-2">
-                                        <span class="mp-badge badge-count"><?= (int)$brandCount ?> brands</span>
+                                        <?php $mappedBrands = $brandsByCategory[$categoryId] ?? []; ?>
+                                        <span class="mp-badge badge-count">
+                                            <?= count($mappedBrands) ?> brand<?= count($mappedBrands) === 1 ? '' : 's' ?>
+                                        </span>
                                     </div>
 
                                     <?php if ($permissions['can_edit'] || $permissions['can_delete']): ?>
                                     <div class="d-flex flex-wrap gap-2 mt-2">
+                                        <?php $mappedBrands = $brandsByCategory[$categoryId] ?? []; ?>
+
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info mp-action-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#viewBrandsModal"
+                                                onclick='viewCategoryBrands(
+                                                    <?= json_encode($category['category_name'], JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                                                    <?= json_encode($mappedBrands, JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+                                                )'>
+                                            View
+                                        </button>
+
                                         <?php if ($permissions['can_edit']): ?>
                                         <button type="button" class="btn btn-sm btn-outline-primary mp-action-btn"
                                             data-bs-toggle="modal" data-bs-target="#categoryModal"
@@ -659,6 +779,28 @@ mysqli_stmt_close($stmt);
                 <?php include __DIR__ . '/includes/footer.php'; ?>
             </section>
         </main>
+    </div>
+
+    <div class="modal fade" id="viewBrandsModal" tabindex="-1">
+        <div class="modal-dialog modal-md modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Mapped Brands</h5>
+                        <div class="mp-sub" id="viewBrandsCategoryName"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div id="viewBrandsList" class="brand-view-modal-list"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="categoryModal" tabindex="-1">
@@ -703,6 +845,41 @@ mysqli_stmt_close($stmt);
     <?php include __DIR__ . '/includes/script.php'; ?>
 
     <script>
+    function escapeBrandText(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function(character) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[character];
+        });
+    }
+
+    function viewCategoryBrands(categoryName, brands) {
+        document.getElementById('viewBrandsCategoryName').textContent =
+            categoryName ? 'Category: ' + categoryName : '';
+
+        const list = document.getElementById('viewBrandsList');
+        const mappedBrands = Array.isArray(brands) ? brands : [];
+
+        if (!mappedBrands.length) {
+            list.innerHTML = '<div class="brand-empty">No brands mapped to this category.</div>';
+            return;
+        }
+
+        list.innerHTML = mappedBrands.map(function(brand) {
+            const inactiveClass = Number(brand.status) === 1 ? '' : ' inactive';
+            const statusText = Number(brand.status) === 1 ? '' : ' (Inactive)';
+
+            return '<span class="brand-view-modal-item' + inactiveClass + '">' +
+                escapeBrandText(brand.brand_name || '-') +
+                escapeBrandText(statusText) +
+                '</span>';
+        }).join('');
+    }
+
     function openCategoryModal() {
         document.getElementById("categoryAction").value = "create_category";
         document.getElementById("categoryId").value = "";
