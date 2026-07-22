@@ -683,6 +683,134 @@ function cc_log_activity(mysqli $conn, $businessId, $branchId, $userId, $module,
     ", 'iiiississs', array($businessId, $branchId, $userId, $roleId, $module, $action, $recordId, $json, $ip, $device));
 }
 
+
+/**
+ * Build a complete local .NET collection-receipt payload.
+ * The live server returns this JSON to the browser. The browser then sends it
+ * to 127.0.0.1:17900 on the cashier's own Windows computer.
+ */
+function cc_collection_print_payload(mysqli $conn, $businessId, $billId, $userId, $previousPaid, $previousBalance, $appliedAmount, $tenderedAmount, $newPaid, $newBalance, $newStatus, array $paymentsInput) {
+    $bill = cc_one($conn, "
+        SELECT b.*, bb.barcode_value,
+               br.branch_name, br.floor_name,
+               bus.business_name, bus.address AS business_address,
+               bus.mobile AS business_mobile, bus.gstin,
+               creator.name AS sales_user_name,
+               cashier.name AS cashier_name
+        FROM bills b
+        LEFT JOIN bill_barcodes bb
+               ON bb.bill_id = b.bill_id AND bb.business_id = b.business_id
+        LEFT JOIN branches br
+               ON br.branch_id = b.branch_id AND br.business_id = b.business_id
+        LEFT JOIN businesses bus
+               ON bus.business_id = b.business_id
+        LEFT JOIN users creator
+               ON creator.user_id = b.created_by AND creator.business_id = b.business_id
+        LEFT JOIN users cashier
+               ON cashier.user_id = ? AND cashier.business_id = b.business_id
+        WHERE b.business_id = ? AND b.bill_id = ?
+        LIMIT 1
+    ", 'iii', array($userId, $businessId, $billId));
+
+    if (!$bill) {
+        return null;
+    }
+
+    $itemsDb = cc_all($conn, "
+        SELECT bi.*, sii.color
+        FROM bill_items bi
+        LEFT JOIN stock_inward_items sii
+               ON sii.stock_item_id = bi.stock_item_id AND sii.business_id = bi.business_id
+        WHERE bi.business_id = ? AND bi.bill_id = ?
+        ORDER BY bi.bill_item_id ASC
+    ", 'ii', array($businessId, $billId));
+
+    $items = array();
+    $totalQty = 0.0;
+    foreach ($itemsDb as $row) {
+        $qty = (float)($row['qty'] ?? 0);
+        $rate = (float)($row['selling_rate'] ?? $row['rate'] ?? 0);
+        $amount = (float)($row['amount'] ?? ($qty * $rate));
+        $descriptionParts = array();
+        if (!empty($row['article_no'])) $descriptionParts[] = 'Article: ' . $row['article_no'];
+        if (!empty($row['size'])) $descriptionParts[] = 'Size: ' . $row['size'];
+        if (!empty($row['color'])) $descriptionParts[] = 'Colour: ' . $row['color'];
+
+        $items[] = array(
+            'Name' => (string)($row['article_name'] ?? $row['article_no'] ?? 'Item'),
+            'Description' => implode(' | ', $descriptionParts),
+            'Qty' => $qty,
+            'Rate' => $rate,
+            'Amount' => $amount,
+            'BarcodeValue' => (string)($row['barcode_value'] ?? '')
+        );
+        $totalQty += $qty;
+    }
+
+    $methodNames = array();
+    $references = array();
+    foreach ($paymentsInput as $payment) {
+        $methodId = (int)($payment['payment_method_id'] ?? 0);
+        if ($methodId > 0) {
+            $method = cc_one($conn, "
+                SELECT payment_method_name, method_type
+                FROM payment_methods
+                WHERE business_id = ? AND payment_method_id = ?
+                LIMIT 1
+            ", 'ii', array($businessId, $methodId));
+            if ($method) {
+                $methodName = trim((string)($method['payment_method_name'] ?? $method['method_type'] ?? ''));
+                if ($methodName !== '' && !in_array($methodName, $methodNames, true)) {
+                    $methodNames[] = $methodName;
+                }
+            }
+        }
+        $reference = trim((string)($payment['reference_no'] ?? ''));
+        if ($reference !== '') $references[] = $reference;
+    }
+
+    $branch = trim((string)($bill['branch_name'] ?? ''));
+    if (!empty($bill['floor_name'])) {
+        $branch .= ($branch !== '' ? ' / ' : '') . $bill['floor_name'];
+    }
+
+    $collectionTime = date('h:i A');
+    $collectionDate = date('d-m-Y');
+
+    return array(
+        'BillId' => (int)$billId,
+        'ShopName' => (string)($bill['business_name'] ?? 'GK FOOTWEAR'),
+        'Address' => (string)($bill['business_address'] ?? ''),
+        'Phone' => (string)($bill['business_mobile'] ?? ''),
+        'GSTIN' => (string)($bill['gstin'] ?? ''),
+        'InvoiceTitle' => 'PAYMENT RECEIPT',
+        'BillNo' => (string)($bill['bill_no'] ?? ''),
+        'OrderNo' => (string)($bill['order_no'] ?? ''),
+        'Date' => $collectionDate,
+        'Time' => $collectionTime,
+        'Customer' => (string)($bill['customer_name'] ?? 'Walk-in Customer'),
+        'Branch' => $branch,
+        'Salesman' => (string)($bill['sales_user_name'] ?? ''),
+        'CollectedBy' => (string)($bill['cashier_name'] ?? ($_SESSION['name'] ?? 'Cashier')),
+        'PaymentStatus' => strtoupper((string)$newStatus),
+        'PaymentMethod' => implode(' + ', $methodNames),
+        'ReferenceNo' => implode(', ', $references),
+        'TransactionType' => 'COLLECTION',
+        'TotalQty' => $totalQty,
+        'GrandTotal' => (float)($bill['net_amount'] ?? 0),
+        'PreviousPaid' => (float)$previousPaid,
+        'PreviousBalance' => (float)$previousBalance,
+        'CollectionAmount' => (float)$appliedAmount,
+        'TenderedAmount' => (float)$tenderedAmount,
+        'ChangeAmount' => max(0, (float)$tenderedAmount - (float)$appliedAmount),
+        'Paid' => (float)$newPaid,
+        'Balance' => (float)$newBalance,
+        'Barcode' => (string)($bill['barcode_value'] ?? ''),
+        'PrintType' => 'COLLECTION_PAYMENT',
+        'Items' => $items
+    );
+}
+
 function cc_collect_payment(mysqli $conn, $businessId, $allowedIds) {
     $billId = (int)($_POST['bill_id'] ?? 0);
     $methodId = (int)($_POST['payment_method_id'] ?? 0);
@@ -843,13 +971,29 @@ function cc_collect_payment(mysqli $conn, $businessId, $allowedIds) {
             LIMIT 1
         ", 'ii', array($businessId, $billId));
 
+        $printPayload = cc_collection_print_payload(
+            $conn,
+            $businessId,
+            $billId,
+            $userId,
+            $oldPaid,
+            $oldBalance,
+            $totalApplied,
+            $totalTendered,
+            $newPaid,
+            $newBalance,
+            $newStatus,
+            $paymentsInput
+        );
+
         cc_json(array(
             'success' => true,
             'message' => 'Payment collected successfully.',
             'bill' => $fresh,
             'applied_amount' => $totalApplied,
             'change_amount' => max(0, $totalTendered - $totalApplied),
-            'payment_status' => $newStatus
+            'payment_status' => $newStatus,
+            'print_payload' => $printPayload
         ));
     } catch (Exception $e) {
         mysqli_rollback($conn);

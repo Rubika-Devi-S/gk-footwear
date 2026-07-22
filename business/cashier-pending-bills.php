@@ -409,85 +409,82 @@ async function openPayment(id){
     }catch(e){showMessage('error','Unable to fetch invoice.');}
 }
 
-async function autoPrintThermalReceipt(billId,gst,collectionAmount){
-    billId=parseInt(billId||0,10);
-    if(!billId){
-        throw new Error('Invalid bill id for thermal printing.');
+const LOCAL_THERMAL_PRINT_URLS=[
+    'http://127.0.0.1:17900/'
+];
+const LOCAL_THERMAL_TIMEOUT_MS=10000;
+
+function localThermalEndpointOrder(){
+    const saved=String(localStorage.getItem('gk_thermal_print_endpoint')||'').trim();
+    const urls=[];
+    if(saved)urls.push(saved);
+    LOCAL_THERMAL_PRINT_URLS.forEach(url=>{if(!urls.includes(url))urls.push(url);});
+    return urls;
+}
+
+function localThermalPrintSucceeded(response,text,json){
+    if(!response.ok)return false;
+    if(json&&json.success===true)return true;
+    const value=String((json&&(json.message||json.status||json.result))||text||'').toUpperCase();
+    return value.includes('PRINT_SUCCESS')||value.includes('PRINTED')||value==='OK'||value.includes('SUCCESS');
+}
+
+async function autoPrintThermalReceipt(printPayload){
+    if(!printPayload||typeof printPayload!=='object'){
+        throw new Error('The collection API did not return thermal print data.');
     }
 
-    gst=gst||collectionGstSummary();
+    printPayload.PrintType='COLLECTION_PAYMENT';
+    printPayload.Copies=1;
+    printPayload.PrintCopies=1;
+    printPayload.JobId='GK-COLLECTION-'+String(printPayload.BillId||printPayload.BillNo||Date.now())+'-'+Date.now();
 
-    const params=new URLSearchParams();
-    params.set('bill_id',billId);
-    params.set('auto_print','1');
-    params.set('source','pending_collections');
-    params.set('collection_amount',num(collectionAmount||0).toFixed(2));
-    params.set('base_due_amount',num(state.bill&&state.bill.balance_amount).toFixed(2));
-    params.set('collection_total_amount',collectionDueTotal(gst).toFixed(2));
-    params.set('payment_method_name',selectedMethod().payment_method_name||selectedMethod().method_type||'Payment');
+    let lastError=null;
 
-    const collectedBy=<?= json_encode($cashierName) ?>;
-    params.set('collected_by',collectedBy);
-    params.set('gst_enabled',gst.enabled?1:0);
-    params.set('gst_mode',gst.mode||'intra');
-    params.set('gst_rate',num(gst.rate).toFixed(2));
-    params.set('taxable_amount',num(gst.taxable).toFixed(2));
-    params.set('cgst_amount',num(gst.cgst).toFixed(2));
-    params.set('sgst_amount',num(gst.sgst).toFixed(2));
-    params.set('igst_amount',num(gst.igst).toFixed(2));
-    params.set('tax_amount',num(gst.gstAmount).toFixed(2));
+    for(const endpoint of localThermalEndpointOrder()){
+        const controller=new AbortController();
+        const timeoutId=window.setTimeout(()=>controller.abort(),LOCAL_THERMAL_TIMEOUT_MS);
 
-    /*
-     * IMPORTANT:
-     * The receipt endpoint itself sends the receipt to the local .NET
-     * thermal-print service. Fetch it silently so the browser does not:
-     *  - load the JSON response in an iframe,
-     *  - call window.print(),
-     *  - open a new tab,
-     *  - show the browser print-preview dialog.
-     */
-    const printUrl='cashier-thermal-receipt.php?'+params.toString();
-    const response=await fetch(printUrl,{
-        method:'GET',
-        credentials:'same-origin',
-        cache:'no-store',
-        headers:{
-            'Accept':'application/json',
-            'X-Requested-With':'XMLHttpRequest'
+        try{
+            const response=await fetch(endpoint,{
+                method:'POST',
+                mode:'cors',
+                cache:'no-store',
+                credentials:'omit',
+                signal:controller.signal,
+                headers:{
+                    'Content-Type':'application/json',
+                    'Accept':'application/json, text/plain, */*',
+                    'X-Print-Job-Id':printPayload.JobId
+                },
+                body:JSON.stringify(printPayload)
+            });
+
+            const text=await response.text();
+            let json=null;
+            try{json=text?JSON.parse(text):null;}catch(ignored){}
+
+            if(localThermalPrintSucceeded(response,text,json)){
+                localStorage.setItem('gk_thermal_print_endpoint',endpoint);
+                return true;
+            }
+
+            lastError=new Error((json&&json.message)||text||('HTTP '+response.status));
+        }catch(error){
+            lastError=error;
+        }finally{
+            window.clearTimeout(timeoutId);
         }
-    });
-
-    const raw=await response.text();
-    let result=null;
-
-    try{
-        result=raw?JSON.parse(raw):null;
-    }catch(error){
-        throw new Error('Thermal print service returned an invalid response.');
     }
 
-    if(!response.ok){
-        throw new Error((result&&result.message)||('Thermal print request failed with HTTP '+response.status+'.'));
+    if(lastError&&lastError.name==='AbortError'){
+        throw new Error('Local thermal print service timed out.');
     }
 
-    if(!result||result.success!==true){
-        throw new Error((result&&result.message)||'Thermal printer did not confirm the print job.');
-    }
-
-    const printResponse=String(
-        (result.data&&result.data.print_response)||
-        result.print_response||
-        ''
-    ).toUpperCase();
-
-    if(printResponse&&
-       !printResponse.includes('SUCCESS')&&
-       !printResponse.includes('PRINTED')&&
-       printResponse!=='OK'){
-        throw new Error((result&&result.message)||('Printer response: '+printResponse));
-    }
-
-    return result;
+    throw new Error(
+        'Unable to connect to the local thermal print service. '
+        +'Confirm ThermalPrinterInvoice is running on this computer and port 17900 is listening.'
+    );
 }
 
 function mixedPayload(){if(!isSplit())return null;const rows=[];document.querySelectorAll('.mixed-amount').forEach(input=>{const methodId=parseInt(input.dataset.methodId,10);const amount=num(input.value);const ref=document.querySelector('.mixed-ref[data-method-id="'+methodId+'"]');if(amount>0)rows.push({payment_method_id:methodId,amount_collected:amount,reference_no:ref?ref.value:'',payment_note:($('payment_note')||{}).value||''});});return rows;}
@@ -556,11 +553,11 @@ async function collectPayment(printAfter){
         let successMessage=data.message||'Payment collected successfully.';
         if(printAfter){
             try{
-                await autoPrintThermalReceipt(billId,gst,amount);
+                await autoPrintThermalReceipt(data.print_payload);
                 successMessage+=' Receipt printed successfully.';
                 showMessage('success',successMessage);
             }catch(printError){
-                showMessage('warning',successMessage+' Payment is saved, but thermal printing failed: '+(printError.message||'Unknown printer error.'));
+                showMessage('error','Payment was saved, but the local printer did not receive the receipt. '+(printError.message||'Unknown printer error.'));
             }
         }else{
             showMessage('success',successMessage);

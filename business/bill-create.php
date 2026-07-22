@@ -1766,8 +1766,8 @@ if ($businessId <= 0) {
     const THERMAL_PRINT_ENDPOINTS = [
         'http://127.0.0.1:17900/',
         'http://127.0.0.1:17900/print',
-        'http://localhost:17900/',
-        'http://localhost:17900/print'
+        // 'http://localhost:17900/',
+        // 'http://localhost:17900/print'
     ];
     const THERMAL_PRINT_TIMEOUT_MS = 3500;
     let thermalPrintInProgress = false;
