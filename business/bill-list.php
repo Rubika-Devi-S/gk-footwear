@@ -1098,19 +1098,49 @@ if ($businessId <= 0) {
         return '<div class="bill-detail-box"><div class="mp-stat-label">' + escapeHtml(label) + '</div><div class="mp-title mt-1">' + value + '</div></div>';
     }
 
-    function renderItems(items) {
+    function renderItems(items, bill) {
         if (!items || !items.length) return '<div class="text-muted small">No bill items found.</div>';
+
+        bill = bill || {};
+        const netAmount = toNumber(bill.net_amount);
+        const prepared = items.map(function (item) {
+            const qty = Math.max(0, toNumber(item.qty));
+            const mrpRate = Math.max(0, toNumber(item.mrp_rate));
+            const storedSellingRate = Math.max(0, toNumber(item.selling_rate));
+            const storedAmount = Math.max(0, toNumber(item.amount));
+            const baseAmount = storedAmount > 0 ? storedAmount : qty * storedSellingRate;
+            return { item: item, qty: qty, mrpRate: mrpRate, baseAmount: baseAmount };
+        });
+
+        const baseTotal = prepared.reduce(function (sum, row) { return sum + row.baseAmount; }, 0);
+        let allocated = 0;
+
         return '<div class="table-responsive mt-3"><table class="table mp-table mb-0"><thead><tr><th>Article</th><th>Brand</th><th>Size / Color</th><th>Qty</th><th>MRP</th><th>Discount</th><th>Selling</th><th>Amount</th></tr></thead><tbody>' +
-            items.map(function (item) {
+            prepared.map(function (row, index) {
+                const item = row.item;
+                const mrpAmount = row.mrpRate * row.qty;
+                let finalAmount = row.baseAmount;
+
+                if (netAmount >= 0 && baseTotal > 0) {
+                    finalAmount = index === prepared.length - 1
+                        ? Math.max(0, netAmount - allocated)
+                        : Math.max(0, Math.round((netAmount * row.baseAmount / baseTotal) * 100) / 100);
+                    allocated += finalAmount;
+                }
+
+                const finalSellingRate = row.qty > 0 ? finalAmount / row.qty : 0;
+                const finalDiscountAmount = Math.max(0, mrpAmount - finalAmount);
+                const discountPerUnit = row.qty > 0 ? finalDiscountAmount / row.qty : finalDiscountAmount;
+
                 return '<tr>' +
                     '<td><div class="mp-title">' + escapeHtml(item.article_no || '-') + '</div><div class="mp-sub">' + escapeHtml(item.article_name || '-') + '</div></td>' +
                     '<td>' + escapeHtml(item.brand_name || '-') + '</td>' +
                     '<td>' + escapeHtml(item.size || '-') + '<div class="mp-sub">' + escapeHtml(item.color || '-') + '</div></td>' +
-                    '<td>' + toNumber(item.qty).toFixed(2) + '</td>' +
-                    '<td>' + money.format(toNumber(item.mrp_rate)) + '</td>' +
-                    '<td>' + money.format(toNumber(item.discount_amount)) + '<div class="mp-sub">' + escapeHtml(item.discount_type || 'none') + ' ' + toNumber(item.discount_value).toFixed(2) + '</div></td>' +
-                    '<td>' + money.format(toNumber(item.selling_rate)) + '</td>' +
-                    '<td><strong>' + money.format(toNumber(item.amount)) + '</strong></td>' +
+                    '<td>' + row.qty.toFixed(2) + '</td>' +
+                    '<td>' + money.format(row.mrpRate) + '</td>' +
+                    '<td>' + money.format(finalDiscountAmount) + '<div class="mp-sub">Final discount · ' + money.format(discountPerUnit) + ' / unit</div></td>' +
+                    '<td>' + money.format(finalSellingRate) + '</td>' +
+                    '<td><strong>' + money.format(finalAmount) + '</strong></td>' +
                 '</tr>';
             }).join('') + '</tbody></table></div>';
     }
@@ -1171,7 +1201,7 @@ if ($businessId <= 0) {
                     detailBox('Due Amount', '<span class="amount-due">' + money.format(toNumber(bill.balance_amount)) + '</span>') +
                 '</div>' +
                 '<div class="d-flex flex-wrap gap-2 mt-3">' + statusBadge(bill.bill_status, 'Bill') + statusBadge(bill.payment_status, 'Payment') + '<span class="mp-badge badge-code">Prints ' + parseInt(bill.print_count || 0, 10) + '</span></div>' +
-                '<h6 class="fw-bold mt-4 mb-2">Bill Items</h6>' + renderItems(data.items || []) +
+                '<h6 class="fw-bold mt-4 mb-2">Bill Items</h6>' + renderItems(data.items || [], bill) +
                 '<h6 class="fw-bold mt-4 mb-2">Payments</h6>' + renderPayments(data.payments || []);
 
             if (window.lucide) window.lucide.createIcons();

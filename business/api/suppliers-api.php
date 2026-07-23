@@ -563,6 +563,19 @@ try {
                 $supplier['db_current_balance'] = (float)($supplier['current_outstanding'] ?? 0);
                 $supplier['current_outstanding'] = $calc['calculated_balance'];
 
+                $isInactive = (int)($supplier['status'] ?? 1) === 0;
+                $isZeroBalance = abs((float)$calc['calculated_balance']) <= 0.009;
+
+                $supplier['delete_eligible'] = ($isInactive && $isZeroBalance) ? 1 : 0;
+
+                if (!$isInactive) {
+                    $supplier['delete_block_reason'] = 'Active supplier cannot be deleted. Change status to Inactive first.';
+                } elseif (!$isZeroBalance) {
+                    $supplier['delete_block_reason'] = 'Supplier cannot be deleted until the calculated balance becomes zero.';
+                } else {
+                    $supplier['delete_block_reason'] = '';
+                }
+
                 $stats['total_suppliers']++;
                 if ((int)($supplier['status'] ?? 0) === 1) {
                     $stats['active_suppliers']++;
@@ -800,16 +813,160 @@ try {
             throw new RuntimeException('Invalid supplier selected.');
         }
 
-        if (supplier_has_dependency($conn, $businessId, $supplierId)) {
-            throw new RuntimeException('This supplier is already used in stock/ledger. Deactivate it instead of deleting.');
+        /*
+         * Delete rule:
+         * 1. Supplier must be INACTIVE.
+         * 2. Calculated supplier balance must be exactly zero.
+         *
+         * A positive credit/outstanding balance or negative advance/debit
+         * balance must never be deleted.
+         */
+        $supplier = supplier_one(
+            $conn,
+            "SELECT * FROM suppliers
+             WHERE business_id = ? AND supplier_id = ?
+             LIMIT 1",
+            'ii',
+            [$businessId, $supplierId]
+        );
+
+        if (!$supplier) {
+            throw new RuntimeException('Supplier not found.');
         }
 
-        $stmt = mysqli_prepare($conn, "DELETE FROM suppliers WHERE business_id = ? AND supplier_id = ?");
-        mysqli_stmt_bind_param($stmt, 'ii', $businessId, $supplierId);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
+        if ((int)($supplier['status'] ?? 1) !== 0) {
+            throw new RuntimeException(
+                'Active supplier cannot be deleted. Change the supplier status to Inactive first.'
+            );
+        }
 
-        supplier_json(['success' => true, 'message' => 'Supplier deleted successfully.']);
+        $statement = supplier_calculate_statement(
+            $conn,
+            $businessId,
+            $supplier
+        );
+
+        $calculatedBalance = round(
+            (float)($statement['summary']['closing_balance'] ?? 0),
+            2
+        );
+
+        if (abs($calculatedBalance) > 0.009) {
+            $balanceType = $calculatedBalance > 0
+                ? 'credit/outstanding'
+                : 'advance/debit';
+
+            throw new RuntimeException(
+                'Supplier cannot be deleted because the calculated '
+                . $balanceType
+                . ' balance is Rs. '
+                . number_format(abs($calculatedBalance), 2)
+                . '. Clear the balance to zero first.'
+            );
+        }
+
+        mysqli_begin_transaction($conn);
+
+        try {
+            /*
+             * Zero-balance ledger and outstanding summary records can be
+             * removed before deleting the inactive supplier master.
+             */
+            if (supplier_table_exists($conn, 'vendor_outstanding')) {
+                $stmt = mysqli_prepare(
+                    $conn,
+                    "DELETE FROM vendor_outstanding
+                     WHERE business_id = ? AND supplier_id = ?"
+                );
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    'ii',
+                    $businessId,
+                    $supplierId
+                );
+                mysqli_stmt_execute($stmt);
+                mysqli_stmt_close($stmt);
+            }
+
+            if (supplier_table_exists($conn, 'vendor_ledger')) {
+                $stmt = mysqli_prepare(
+                    $conn,
+                    "DELETE FROM vendor_ledger
+                     WHERE business_id = ? AND supplier_id = ?"
+                );
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    'ii',
+                    $businessId,
+                    $supplierId
+                );
+                mysqli_stmt_execute($stmt);
+                mysqli_stmt_close($stmt);
+            }
+
+            $stmt = mysqli_prepare(
+                $conn,
+                "DELETE FROM suppliers
+                 WHERE business_id = ?
+                   AND supplier_id = ?
+                   AND status = 0"
+            );
+            mysqli_stmt_bind_param(
+                $stmt,
+                'ii',
+                $businessId,
+                $supplierId
+            );
+            mysqli_stmt_execute($stmt);
+
+            $deletedRows = mysqli_stmt_affected_rows($stmt);
+            mysqli_stmt_close($stmt);
+
+            if ($deletedRows !== 1) {
+                throw new RuntimeException(
+                    'Supplier delete failed. Confirm that the supplier is inactive.'
+                );
+            }
+
+            mysqli_commit($conn);
+
+            if (function_exists('log_activity')) {
+                try {
+                    log_activity(
+                        $conn,
+                        'Suppliers',
+                        'delete_supplier',
+                        $supplierId,
+                        [
+                            'supplier_name' => $supplier['supplier_name'] ?? '',
+                            'calculated_balance' => $calculatedBalance,
+                            'status' => 'inactive',
+                        ],
+                        null
+                    );
+                } catch (Throwable $ignored) {
+                    // Supplier deletion must not fail only because logging failed.
+                }
+            }
+
+            supplier_json([
+                'success' => true,
+                'message' => 'Inactive zero-balance supplier deleted successfully.'
+            ]);
+        } catch (Throwable $deleteError) {
+            mysqli_rollback($conn);
+
+            if (
+                stripos($deleteError->getMessage(), 'foreign key') !== false
+                || stripos($deleteError->getMessage(), 'constraint') !== false
+            ) {
+                throw new RuntimeException(
+                    'This supplier has linked stock inward or purchase records and cannot be permanently deleted. Keep it inactive for history.'
+                );
+            }
+
+            throw $deleteError;
+        }
     }
 
     supplier_json(['success' => false, 'message' => 'Invalid supplier action.'], 400);

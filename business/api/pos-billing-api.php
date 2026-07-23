@@ -261,6 +261,7 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
 {
     $businessId = (int)$businessId;
     $stockItemId = (int)($params['stock_item_id'] ?? $params['id'] ?? 0);
+    $selectedBranchId = pos_api_branch_id($params);
 
     if ($businessId <= 0) {
         return array('success' => false, 'message' => 'Business session missing. Please login again.');
@@ -275,6 +276,7 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
         FROM stock_inward_items
         WHERE business_id = ?
           AND stock_item_id = ?
+          AND (? = 0 OR branch_id = ?)
         LIMIT 1
     ";
     $baseStmt = mysqli_prepare($conn, $baseSql);
@@ -282,7 +284,7 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
         return array('success' => false, 'message' => 'Product option base query error: ' . mysqli_error($conn));
     }
 
-    mysqli_stmt_bind_param($baseStmt, 'ii', $businessId, $stockItemId);
+    mysqli_stmt_bind_param($baseStmt, 'iiii', $businessId, $stockItemId, $selectedBranchId, $selectedBranchId);
     mysqli_stmt_execute($baseStmt);
     $baseRow = mysqli_fetch_assoc(mysqli_stmt_get_result($baseStmt));
     mysqli_stmt_close($baseStmt);
@@ -341,6 +343,81 @@ function pos_api_product_options(mysqli $conn, $businessId, array $params)
         'success' => true,
         'options' => $options
     );
+}
+
+/** Check matching available stock in all branches except the currently selected branch. */
+function pos_api_other_branch_stock(mysqli $conn, $businessId, array $params)
+{
+    $businessId = (int)$businessId;
+    $selectedBranchId = pos_api_branch_id($params);
+    $query = trim((string)($params['q'] ?? $params['search'] ?? $params['term'] ?? ''));
+
+    if ($businessId <= 0) {
+        return array('success' => false, 'message' => 'Business session missing. Please login again.');
+    }
+    if ($query === '') {
+        return array('success' => false, 'message' => 'Product search value is required.');
+    }
+
+    $like = '%' . $query . '%';
+    $sql = "
+        SELECT
+            br.branch_id, br.branch_name, br.floor_name,
+            COALESCE(SUM(si.available_qty), 0) AS available_qty
+        FROM stock_inward_items si
+        INNER JOIN stock_inward_batches sib
+            ON sib.batch_id = si.batch_id
+           AND sib.business_id = si.business_id
+           AND sib.branch_id = si.branch_id
+        INNER JOIN branches br
+            ON br.branch_id = si.branch_id
+           AND br.business_id = si.business_id
+           AND br.status = 1
+        LEFT JOIN categories c
+            ON c.category_id = si.category_id
+           AND c.business_id = si.business_id
+        LEFT JOIN brands b
+            ON b.brand_id = si.brand_id
+           AND b.business_id = si.business_id
+        LEFT JOIN stock_barcodes sb
+            ON sb.stock_item_id = si.stock_item_id
+           AND sb.business_id = si.business_id
+           AND sb.branch_id = si.branch_id
+           AND sb.barcode_status = 'active'
+        WHERE si.business_id = ?
+          AND si.item_status = 'active'
+          AND si.available_qty > 0
+          AND (? = 0 OR si.branch_id <> ?)
+          AND (
+                si.article_no LIKE ?
+             OR si.article_name LIKE ?
+             OR si.size LIKE ?
+             OR si.color LIKE ?
+             OR sb.barcode_value LIKE ?
+             OR b.brand_name LIKE ?
+             OR c.category_name LIKE ?
+             OR sib.batch_no LIKE ?
+          )
+        GROUP BY br.branch_id, br.branch_name, br.floor_name
+        HAVING available_qty > 0
+        ORDER BY br.branch_name ASC, br.floor_name ASC
+    ";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) {
+        return array('success' => false, 'message' => 'Other branch stock query error: ' . mysqli_error($conn));
+    }
+    $types = 'iiissssssss';
+    $bind = array($businessId, $selectedBranchId, $selectedBranchId, $like, $like, $like, $like, $like, $like, $like, $like);
+    pos_api_bind_params($stmt, $types, $bind);
+    $rows = pos_api_fetch_all($stmt);
+    foreach ($rows as &$row) {
+        $row['branch_id'] = (int)$row['branch_id'];
+        $row['available_qty'] = (float)$row['available_qty'];
+    }
+    unset($row);
+
+    return array('success' => true, 'branches' => $rows);
 }
 
 /**
@@ -581,6 +658,9 @@ try {
         }
         elseif ($action === 'get_product_options') { 
             pos_api_json(pos_api_product_options($conn, $businessId, $_GET)); 
+        }
+        elseif ($action === 'other_branch_stock') { 
+            pos_api_json(pos_api_other_branch_stock($conn, $businessId, $_GET)); 
         }
         elseif ($action === 'scan_product') { 
             pos_api_json($controller->scan($_GET)); 

@@ -413,7 +413,39 @@ if ($businessId <= 0) {
         .preview-barcode-no { font-size:11px; font-weight:800; letter-spacing:.08em; color:#111827; }
         .pos-pending-note { border:1px dashed #f59e0b; background:#fffbeb; color:#92400e; border-radius:16px; padding:10px; font-size:11px; font-weight:850; line-height:1.35; }
         .pos-pending-note strong { color:#78350f; }
-        .scanner-video { width: 100%; max-height: 360px; background:#0f172a; border-radius:16px; object-fit: cover; }
+        .scanner-stage { position:relative; overflow:hidden; border-radius:18px; background:#020617; min-height:360px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), 0 16px 34px rgba(15,23,42,.18); }
+        .scanner-video { width:100%; height:clamp(320px,46vh,480px); display:block; background:#020617; object-fit:cover; }
+        .scanner-overlay { position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; background:linear-gradient(180deg,rgba(2,6,23,.16),transparent 24%,transparent 76%,rgba(2,6,23,.22)); }
+        .scanner-frame { width:min(78%,560px); height:min(42%,190px); position:relative; border-radius:20px; box-shadow:0 0 0 999px rgba(2,6,23,.28); }
+        .scanner-frame::before,.scanner-frame::after { content:""; position:absolute; inset:0; border-radius:20px; }
+        .scanner-frame::before { border:2px solid rgba(255,255,255,.36); }
+        .scanner-frame::after { background:linear-gradient(90deg,#38bdf8,#8b5cf6); height:2px; top:50%; box-shadow:0 0 14px rgba(56,189,248,.85); animation:scannerSweep 1.8s ease-in-out infinite alternate; }
+        .scanner-corner { position:absolute; width:34px; height:34px; border-color:#60a5fa; border-style:solid; }
+        .scanner-corner.tl { left:-1px; top:-1px; border-width:4px 0 0 4px; border-radius:16px 0 0 0; }
+        .scanner-corner.tr { right:-1px; top:-1px; border-width:4px 4px 0 0; border-radius:0 16px 0 0; }
+        .scanner-corner.bl { left:-1px; bottom:-1px; border-width:0 0 4px 4px; border-radius:0 0 0 16px; }
+        .scanner-corner.br { right:-1px; bottom:-1px; border-width:0 4px 4px 0; border-radius:0 0 16px 0; }
+        .scanner-status { position:absolute; left:16px; right:16px; bottom:14px; min-height:42px; padding:9px 13px; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:8px; color:#fff; background:rgba(15,23,42,.76); backdrop-filter:blur(12px); font-size:11px; font-weight:850; text-align:center; }
+        .scanner-status.is-success { background:rgba(21,128,61,.86); }
+        .scanner-status.is-error { background:rgba(185,28,28,.88); }
+        .scanner-status.is-warning { background:rgba(180,83,9,.88); }
+        .scanner-toolbar { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; margin-top:10px; }
+        .scanner-toolbar .pos-input { min-height:38px; }
+        .scanner-help { margin-top:9px; color:var(--pos-muted); font-size:10.5px; line-height:1.45; }
+        .scanner-live-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 5px rgba(34,197,94,.15); animation:scannerPulse 1.2s infinite; }
+        @keyframes scannerSweep { from { transform:translateY(-72px); } to { transform:translateY(72px); } }
+        @keyframes scannerPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(.82); } }
+        @media (max-width:575px) {
+            .scanner-stage { min-height:290px; }
+            .scanner-video { height:330px; }
+            .scanner-toolbar { grid-template-columns:1fr 1fr; }
+            .scanner-toolbar select { grid-column:1 / -1; }
+        }
+        .other-branch-stock-btn { margin-top:9px; border:0; border-radius:12px; min-height:34px; padding:7px 12px; font-size:10.5px; font-weight:950; color:#fff; background:linear-gradient(135deg,#0f766e,#0891b2); display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+        .other-branch-stock-btn:hover { filter:brightness(.96); }
+        .other-stock-table th { font-size:10px; text-transform:uppercase; letter-spacing:.05em; background:#f1f5f9; white-space:nowrap; }
+        .other-stock-table td { font-size:11.5px; vertical-align:middle; }
+        .other-stock-qty { font-weight:950; color:#15803d; }
         .dark-pos { --pos-bg: #0f172a; --pos-card: #111827; --pos-border: rgba(148,163,184,.24); --pos-text:#e5e7eb; --pos-muted:#94a3b8; }
         .dark-pos .pos-topbar, .dark-pos .pos-field-chip, .dark-pos .pos-customer-bar, .dark-pos .summary-card, .dark-pos .product-preview, .dark-pos .bill-customer-card, .dark-pos .product-mini-card, .dark-pos .pos-product-entry-card, .dark-pos .bill-table-wrap { background:#111827; }
         .dark-pos .pos-panel-head, .dark-pos .pos-panel-body { background:#111827; }
@@ -1612,13 +1644,62 @@ if ($businessId <= 0) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal" id="closeScannerBtn"></button>
             </div>
             <div class="modal-body">
-                <video id="scannerVideo" class="scanner-video" playsinline muted></video>
-                <div class="payment-row mt-3">
-                    <input type="text" class="pos-input" id="manualScanInput" placeholder="Scan or type stock barcode / bill barcode">
+                <div class="scanner-stage">
+                    <video id="scannerVideo" class="scanner-video" playsinline muted autoplay></video>
+                    <div class="scanner-overlay">
+                        <div class="scanner-frame">
+                            <span class="scanner-corner tl"></span><span class="scanner-corner tr"></span>
+                            <span class="scanner-corner bl"></span><span class="scanner-corner br"></span>
+                        </div>
+                    </div>
+                    <div class="scanner-status" id="scannerStatus">
+                        <span class="scanner-live-dot"></span>
+                        <span id="scannerStatusText">Starting camera…</span>
+                    </div>
+                </div>
+                <div class="scanner-toolbar">
+                    <select class="pos-input" id="cameraSelect" aria-label="Select camera">
+                        <option value="">Default camera</option>
+                    </select>
+                    <button type="button" class="small-tool-btn" id="torchBtn" disabled>
+                        <i data-lucide="flashlight"></i> Torch
+                    </button>
+                    <button type="button" class="small-tool-btn" id="restartScannerBtn">
+                        <i data-lucide="refresh-cw"></i> Restart
+                    </button>
+                </div>
+                <div class="payment-row mt-2">
+                    <input type="text" class="pos-input" id="manualScanInput" placeholder="Type barcode and press Enter">
                     <button type="button" class="small-tool-btn" id="manualScanBtn">Use Code</button>
                 </div>
-                <div class="text-muted small mt-2">USB scanner: click the input and scan. Camera scanning uses browser BarcodeDetector when supported.</div>
+                <div class="scanner-help">
+                    Hold the barcode steady inside the frame. After detection, the product is added automatically and the camera stays ready for the next item.
+                </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="otherBranchStockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Other Branch Stock Availability</h5>
+                    <div class="pos-panel-sub" id="otherBranchStockSub">Checking stock in other branches...</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small mb-3">For stock checking only. Products from another branch cannot be added to this bill.</div>
+                <div class="table-responsive">
+                    <table class="table table-bordered other-stock-table mb-0">
+                        <thead><tr><th>Branch Name</th><th class="text-end">Available Quantity</th></tr></thead>
+                        <tbody id="otherBranchStockBody"><tr><td colspan="2" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light rounded-pill fw-bold" data-bs-dismiss="modal">Close</button></div>
         </div>
     </div>
 </div>
@@ -1685,7 +1766,17 @@ if ($businessId <= 0) {
         lastSavedBranchName: '',
         previewBill: null,
         scannerStream: null,
-        scannerTimer: null
+        scannerTimer: null,
+        scannerDetector: null,
+        scannerRunning: false,
+        scannerBusy: false,
+        scannerLastCode: '',
+        scannerLastSeenAt: 0,
+        scannerCooldownUntil: 0,
+        scannerAnimationFrame: null,
+        zxingReader: null,
+        zxingControls: null,
+        torchEnabled: false
     };
 
     const el = {
@@ -1757,7 +1848,12 @@ if ($businessId <= 0) {
         billHistorySearch: document.getElementById('billHistorySearch'),
         previewBody: document.getElementById('previewBody'),
         scannerVideo: document.getElementById('scannerVideo'),
-        manualScanInput: document.getElementById('manualScanInput')
+        manualScanInput: document.getElementById('manualScanInput'),
+        scannerStatus: document.getElementById('scannerStatus'),
+        scannerStatusText: document.getElementById('scannerStatusText'),
+        cameraSelect: document.getElementById('cameraSelect'),
+        torchBtn: document.getElementById('torchBtn'),
+        restartScannerBtn: document.getElementById('restartScannerBtn')
     };
 
     // ============================================
@@ -2984,7 +3080,7 @@ if ($businessId <= 0) {
             return;
         }
         try {
-            const data = await apiGet({ action: 'search_products', q: query });
+            const data = await apiGet({ action: 'search_products', q: query, branch_id: state.branchId });
             if (!data.success) {
                 return;
             }
@@ -2996,8 +3092,11 @@ if ($businessId <= 0) {
                     <div class="suggestion-item is-empty">
                         <div class="suggestion-img">0</div>
                         <div class="suggestion-content">
-                            <div class="suggestion-name">No stock found</div>
-                            <div class="suggestion-meta"><span>Try article no, brand, barcode, color or size.</span></div>
+                            <div class="suggestion-name">No stock found in selected branch</div>
+                            <div class="suggestion-meta"><span>Check whether the same product is available in another branch.</span></div>
+                            <button type="button" class="other-branch-stock-btn js-check-other-stock" data-query="${escapeHtml(query)}">
+                                Check Other Branch Stock
+                            </button>
                         </div>
                     </div>`;
                 el.productSuggestions.style.display = 'block';
@@ -3028,9 +3127,45 @@ if ($businessId <= 0) {
         } catch (error) {}
     }
 
+    async function showOtherBranchStock(query) {
+        query = String(query || '').trim();
+        if (!query) {
+            showMessage('warning', 'Enter a product, article number or barcode first.');
+            return;
+        }
+
+        const body = document.getElementById('otherBranchStockBody');
+        const sub = document.getElementById('otherBranchStockSub');
+        body.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">Checking other branches...</td></tr>';
+        sub.textContent = 'Search: ' + query;
+        modal('otherBranchStockModal').show();
+
+        try {
+            const data = await apiGet({
+                action: 'other_branch_stock',
+                q: query,
+                branch_id: state.branchId
+            });
+            if (!data.success) {
+                throw new Error(data.message || 'Unable to check other branch stock.');
+            }
+            const rows = Array.isArray(data.branches) ? data.branches : [];
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">No available stock found in other branches.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function (row) {
+                const branch = (row.branch_name || '-') + (row.floor_name ? ' (' + row.floor_name + ')' : '');
+                return '<tr><td><strong>' + escapeHtml(branch) + '</strong></td><td class="text-end other-stock-qty">' + toNumber(row.available_qty).toFixed(2) + '</td></tr>';
+            }).join('');
+        } catch (error) {
+            body.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-4">' + escapeHtml(error.message || 'Unable to check other branch stock.') + '</td></tr>';
+        }
+    }
+
     async function loadProductOptions(stockItemId, productFromList) {
         try {
-            const data = await apiGet({ action: 'get_product_options', stock_item_id: stockItemId });
+            const data = await apiGet({ action: 'get_product_options', stock_item_id: stockItemId, branch_id: state.branchId });
             const options = data.success ? (data.options || []) : [];
             const selected = options.find(p => Number(p.stock_item_id) === Number(stockItemId)) || productFromList;
             selectProduct(selected, options.length ? options : [productFromList]);
@@ -3097,28 +3232,53 @@ if ($businessId <= 0) {
         el.productSearch.focus();
     }
 
-    async function scanCode(code) {
+    async function scanCode(code, options = {}) {
         code = String(code || '').trim();
-        if (!code) return;
+        if (!code) return false;
+
         try {
-            const data = await apiGet({ action: 'scan_product', code: code });
+            const data = await apiGet({ action: 'scan_product', code: code, branch_id: state.branchId });
+
             if (!data.success || !data.scan) {
-                showMessage('error', data.message || 'Scan failed.');
-                return;
+                if (!options.silent) showMessage('error', data.message || 'Scan failed.');
+                return false;
             }
+
             if (data.scan.type === 'product') {
                 selectProduct(data.scan.product, data.scan.options || [data.scan.product]);
+                const beforeQty = state.items
+                    .filter(i => Number(i.stock_item_id) === Number(data.scan.product.stock_item_id))
+                    .reduce((sum, i) => sum + toNumber(i.qty), 0);
+
                 addSelectedProductToBill(1);
-                showMessage('success', 'Product added from scan.');
-            } else if (data.scan.type === 'bill') {
+
+                const afterQty = state.items
+                    .filter(i => Number(i.stock_item_id) === Number(data.scan.product.stock_item_id))
+                    .reduce((sum, i) => sum + toNumber(i.qty), 0);
+
+                if (afterQty > beforeQty) {
+                    if (!options.silent) {
+                        showMessage('success', beforeQty > 0
+                            ? 'Product quantity updated from camera scan.'
+                            : 'Product added from camera scan.');
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            if (data.scan.type === 'bill') {
                 state.lastSavedBill = data.scan.bill;
                 showPreview(data.scan.bill);
-                showMessage('success', 'Bill barcode loaded.');
-            } else {
-                showMessage('warning', 'No active stock or bill found for this code.');
+                if (!options.silent) showMessage('success', 'Bill barcode loaded.');
+                return true;
             }
+
+            if (!options.silent) showMessage('warning', 'No active stock or bill found for this code.');
+            return false;
         } catch (error) {
-            showMessage('error', 'Unable to scan code.');
+            if (!options.silent) showMessage('error', 'Unable to scan code.');
+            return false;
         }
     }
 
@@ -3719,12 +3879,28 @@ if ($businessId <= 0) {
         }
         clearPersistedBill(oldBranchId);
         state.branchId = parseInt(el.branchSelect.value || 0, 10);
+
+        // Clear every product/stock result from the previously selected branch.
         resetBill(false);
+        state.selectedProduct = null;
+        state.productOptions = [];
+        el.productSuggestions.products = [];
+        el.productSuggestions.innerHTML = '';
+        el.productSuggestions.style.display = 'none';
+        renderProduct(null);
+
         await refreshNumbersAndHolds();
         restorePersistedBill();
+        window.setTimeout(function () { el.productSearch.focus(); }, 100);
     });
 
     document.addEventListener('click', function (event) {
+        const otherStockBtn = event.target.closest('.js-check-other-stock');
+        if (otherStockBtn) {
+            event.preventDefault();
+            showOtherBranchStock(otherStockBtn.dataset.query || el.productSearch.value);
+            return;
+        }
         const productNode = event.target.closest('.js-product-suggestion');
         if (productNode) {
             const id = parseInt(productNode.dataset.id || 0, 10);
@@ -4158,56 +4334,263 @@ if ($businessId <= 0) {
         }
     });
 
-    async function startScanner() {
-        modal('scannerModal').show();
-        el.manualScanInput.focus();
-        if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            return;
-        }
+    function setScannerStatus(message, type = '') {
+        if (!el.scannerStatus || !el.scannerStatusText) return;
+        el.scannerStatus.classList.remove('is-success', 'is-error', 'is-warning');
+        if (type) el.scannerStatus.classList.add('is-' + type);
+        el.scannerStatusText.textContent = message;
+    }
+
+    function scannerBeep(success = true) {
         try {
-            state.scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            el.scannerVideo.srcObject = state.scannerStream;
-            await el.scannerVideo.play();
-            const detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'ean_8'] });
-            state.scannerTimer = setInterval(async function () {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+            const ctx = new AudioContextClass();
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = success ? 980 : 260;
+            gain.gain.setValueAtTime(.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(.16, ctx.currentTime + .01);
+            gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .10);
+            oscillator.connect(gain);
+            gain.connect(ctx.destination);
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + .11);
+            oscillator.addEventListener('ended', () => ctx.close());
+        } catch (error) {}
+    }
+
+    async function handleDetectedBarcode(rawCode) {
+        const code = String(rawCode || '').trim();
+        const now = Date.now();
+        if (!code || state.scannerBusy || now < state.scannerCooldownUntil) return;
+
+        if (code === state.scannerLastCode && now - state.scannerLastSeenAt < 1300) return;
+
+        state.scannerBusy = true;
+        state.scannerLastCode = code;
+        state.scannerLastSeenAt = now;
+        setScannerStatus('Detected ' + code + ' — adding product…');
+
+        const success = await scanCode(code, { silent: true });
+
+        if (success) {
+            scannerBeep(true);
+            setScannerStatus('Added successfully. Ready for next barcode.', 'success');
+            state.scannerCooldownUntil = Date.now() + 850;
+        } else {
+            scannerBeep(false);
+            setScannerStatus('Barcode not found or stock unavailable. Try again.', 'error');
+            state.scannerCooldownUntil = Date.now() + 1200;
+        }
+
+        state.scannerBusy = false;
+        window.setTimeout(function () {
+            if (state.scannerRunning && !state.scannerBusy) {
+                setScannerStatus('Scanner active — show the next barcode.');
+            }
+        }, 950);
+    }
+
+    async function loadZXingBrowser() {
+        if (window.ZXingBrowser) return true;
+        return new Promise(function (resolve) {
+            const existing = document.getElementById('zxingBrowserLibrary');
+            if (existing) {
+                existing.addEventListener('load', () => resolve(!!window.ZXingBrowser), { once: true });
+                existing.addEventListener('error', () => resolve(false), { once: true });
+                return;
+            }
+            const script = document.createElement('script');
+            script.id = 'zxingBrowserLibrary';
+            script.src = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js';
+            script.async = true;
+            script.onload = () => resolve(!!window.ZXingBrowser);
+            script.onerror = () => resolve(false);
+            document.head.appendChild(script);
+        });
+    }
+
+    async function populateCameraList() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices || !el.cameraSelect) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cameras = devices.filter(device => device.kind === 'videoinput');
+            const selected = el.cameraSelect.value;
+            el.cameraSelect.innerHTML = '<option value="">Default camera</option>' +
+                cameras.map((camera, index) =>
+                    `<option value="${escapeHtml(camera.deviceId)}">${escapeHtml(camera.label || ('Camera ' + (index + 1)))}</option>`
+                ).join('');
+            if (selected && cameras.some(camera => camera.deviceId === selected)) {
+                el.cameraSelect.value = selected;
+            }
+        } catch (error) {}
+    }
+
+    async function startNativeScanner(deviceId = '') {
+        const constraints = {
+            audio: false,
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30, max: 60 }
+            }
+        };
+        if (deviceId) {
+            constraints.video.deviceId = { exact: deviceId };
+        } else {
+            constraints.video.facingMode = { ideal: 'environment' };
+        }
+
+        state.scannerStream = await navigator.mediaDevices.getUserMedia(constraints);
+        el.scannerVideo.srcObject = state.scannerStream;
+        await el.scannerVideo.play();
+        await populateCameraList();
+
+        const track = state.scannerStream.getVideoTracks()[0];
+        const capabilities = track && typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+        el.torchBtn.disabled = !capabilities.torch;
+
+        const preferredFormats = ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_39', 'codabar', 'itf', 'qr_code'];
+        let formats = preferredFormats;
+        if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+            const supported = await BarcodeDetector.getSupportedFormats();
+            formats = preferredFormats.filter(format => supported.includes(format));
+        }
+        state.scannerDetector = new BarcodeDetector(formats.length ? { formats } : undefined);
+        state.scannerRunning = true;
+
+        const detectFrame = async function () {
+            if (!state.scannerRunning || !state.scannerDetector) return;
+            if (!state.scannerBusy && el.scannerVideo.readyState >= 2) {
                 try {
-                    const barcodes = await detector.detect(el.scannerVideo);
-                    if (barcodes && barcodes.length) {
-                        const code = barcodes[0].rawValue;
-                        stopScanner();
-                        modal('scannerModal').hide();
-                        scanCode(code);
+                    const results = await state.scannerDetector.detect(el.scannerVideo);
+                    if (results && results.length) {
+                        await handleDetectedBarcode(results[0].rawValue);
+                    } else if (Date.now() - state.scannerLastSeenAt > 700) {
+                        state.scannerLastCode = '';
                     }
                 } catch (error) {}
-            }, 700);
+            }
+            state.scannerAnimationFrame = requestAnimationFrame(detectFrame);
+        };
+        detectFrame();
+    }
+
+    async function startZXingScanner(deviceId = '') {
+        const loaded = await loadZXingBrowser();
+        if (!loaded || !window.ZXingBrowser || !window.ZXingBrowser.BrowserMultiFormatReader) {
+            throw new Error('Barcode scanner library could not be loaded.');
+        }
+
+        state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
+        state.scannerRunning = true;
+        state.zxingControls = await state.zxingReader.decodeFromVideoDevice(
+            deviceId || undefined,
+            el.scannerVideo,
+            function (result, error, controls) {
+                if (controls) state.zxingControls = controls;
+                if (result && typeof result.getText === 'function') {
+                    handleDetectedBarcode(result.getText());
+                }
+            }
+        );
+        await populateCameraList();
+        el.torchBtn.disabled = true;
+    }
+
+    async function startScanner() {
+        modal('scannerModal').show();
+        await stopScanner(false);
+        setScannerStatus('Requesting camera permission…');
+        el.manualScanInput.value = '';
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setScannerStatus('Camera access requires localhost or HTTPS.', 'error');
+            return;
+        }
+
+        try {
+            const deviceId = el.cameraSelect ? el.cameraSelect.value : '';
+            if ('BarcodeDetector' in window) {
+                await startNativeScanner(deviceId);
+                setScannerStatus('Scanner active — show a barcode inside the frame.');
+            } else {
+                setScannerStatus('Loading compatible barcode scanner…');
+                await startZXingScanner(deviceId);
+                setScannerStatus('Scanner active — show a barcode inside the frame.');
+            }
         } catch (error) {
-            showMessage('warning', 'Camera scanner unavailable. Use manual or USB scanner input.');
+            console.error('Camera scanner error:', error);
+            setScannerStatus('Unable to start camera. Allow camera permission and try again.', 'error');
+            showMessage('warning', 'Camera unavailable. Use localhost/HTTPS and allow camera permission.');
         }
     }
 
-    function stopScanner() {
+    async function stopScanner(clearVideo = true) {
+        state.scannerRunning = false;
+        state.scannerBusy = false;
+        state.scannerDetector = null;
+
+        if (state.scannerAnimationFrame) {
+            cancelAnimationFrame(state.scannerAnimationFrame);
+            state.scannerAnimationFrame = null;
+        }
         if (state.scannerTimer) {
             clearInterval(state.scannerTimer);
             state.scannerTimer = null;
         }
+        if (state.zxingControls && typeof state.zxingControls.stop === 'function') {
+            try { state.zxingControls.stop(); } catch (error) {}
+        }
+        state.zxingControls = null;
+        state.zxingReader = null;
+
         if (state.scannerStream) {
             state.scannerStream.getTracks().forEach(track => track.stop());
             state.scannerStream = null;
         }
-        el.scannerVideo.srcObject = null;
+        if (clearVideo && el.scannerVideo) el.scannerVideo.srcObject = null;
+        if (el.torchBtn) {
+            el.torchBtn.disabled = true;
+            el.torchBtn.classList.remove('active');
+        }
+        state.torchEnabled = false;
     }
 
     document.getElementById('scannerBtn').addEventListener('click', startScanner);
     document.getElementById('scanBillBarcodeBtn').addEventListener('click', startScanner);
-    document.getElementById('closeScannerBtn').addEventListener('click', stopScanner);
-    document.getElementById('scannerModal').addEventListener('hidden.bs.modal', stopScanner);
-    document.getElementById('manualScanBtn').addEventListener('click', function () {
+    document.getElementById('closeScannerBtn').addEventListener('click', function () { stopScanner(); });
+    document.getElementById('scannerModal').addEventListener('hidden.bs.modal', function () { stopScanner(); });
+
+    el.restartScannerBtn.addEventListener('click', startScanner);
+
+    el.cameraSelect.addEventListener('change', function () {
+        if (state.scannerRunning) startScanner();
+    });
+
+    el.torchBtn.addEventListener('click', async function () {
+        const track = state.scannerStream && state.scannerStream.getVideoTracks()[0];
+        if (!track || typeof track.applyConstraints !== 'function') return;
+        try {
+            state.torchEnabled = !state.torchEnabled;
+            await track.applyConstraints({ advanced: [{ torch: state.torchEnabled }] });
+            el.torchBtn.classList.toggle('active', state.torchEnabled);
+        } catch (error) {
+            state.torchEnabled = false;
+            showMessage('warning', 'Torch is not supported by this camera.');
+        }
+    });
+
+    document.getElementById('manualScanBtn').addEventListener('click', async function () {
         const code = el.manualScanInput.value.trim();
         el.manualScanInput.value = '';
-        modal('scannerModal').hide();
-        stopScanner();
-        scanCode(code);
+        if (!code) return;
+        await handleDetectedBarcode(code);
+        el.manualScanInput.focus();
     });
+
     el.manualScanInput.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
             event.preventDefault();

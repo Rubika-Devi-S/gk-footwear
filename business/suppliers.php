@@ -252,6 +252,18 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
         background: #fee2e2;
     }
 
+    .supplier-action-btn.action-delete.blocked-delete {
+        opacity: .72;
+        cursor: not-allowed !important;
+    }
+
+    .supplier-action-btn.action-delete.blocked-delete:hover {
+        transform: none;
+        box-shadow: 0 4px 10px rgba(15, 23, 42, .05);
+        background: #fef2f2;
+        cursor: not-allowed !important;
+    }
+
     .supplier-action-text {
         position: absolute;
         width: 1px;
@@ -653,8 +665,14 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
         document.getElementById('currentOutstandingTotal').textContent = money.format(parseFloat(stats.calculated_balance_total || stats.current_outstanding_total || 0));
     }
 
-    function supplierActions(supplierId, toggleText) {
+    function supplierActions(supplier, toggleText) {
+        const supplierId = parseInt(supplier.supplier_id || 0, 10);
         const isActive = String(toggleText || '').toLowerCase() === 'deactivate';
+        const deleteEligible = parseInt(supplier.delete_eligible || 0, 10) === 1;
+        const deleteReason = String(
+            supplier.delete_block_reason ||
+            'Delete is allowed only for inactive suppliers with zero calculated balance.'
+        );
         const toggleIcon = isActive ? 'user-x' : 'user-check';
         const toggleClass = isActive ? 'action-toggle-active' : 'action-toggle-inactive';
 
@@ -671,8 +689,16 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
             ${canEdit ? `<button type="button" class="supplier-action-btn ${toggleClass} js-toggle" data-id="${supplierId}" title="${toggleText} supplier" aria-label="${toggleText} supplier">
                 <i data-lucide="${toggleIcon}"></i><span class="supplier-action-text">${toggleText}</span>
             </button>` : ''}
-            ${canDelete ? `<button type="button" class="supplier-action-btn action-delete js-delete" data-id="${supplierId}" title="Delete supplier" aria-label="Delete supplier">
-                <i data-lucide="trash-2"></i><span class="supplier-action-text">Delete</span>
+            ${canDelete ? `<button type="button"
+                class="supplier-action-btn action-delete js-delete ${deleteEligible ? '' : 'blocked-delete'}"
+                data-id="${supplierId}"
+                data-delete-eligible="${deleteEligible ? '1' : '0'}"
+                data-delete-reason="${escapeHtml(deleteReason)}"
+                title="${deleteEligible ? 'Delete supplier' : escapeHtml(deleteReason)}"
+                aria-label="${deleteEligible ? 'Delete supplier' : escapeHtml(deleteReason)}"
+                ${deleteEligible ? '' : 'aria-disabled="true"'}>
+                <i data-lucide="trash-2"></i>
+                <span class="supplier-action-text">${deleteEligible ? 'Delete' : 'Delete blocked'}</span>
             </button>` : ''}
         </div>`;
     }
@@ -698,14 +724,14 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
                 <td><div class="fw-bold">${money.format(parseFloat(supplier.calculated_balance ?? supplier.current_outstanding ?? 0))}</div></td>
                 <td>${statusBadge(supplier.status)}</td>
                 <td>${escapeHtml(createdDate)}</td>
-                <td>${supplierActions(supplierId, toggleText)}</td>
+                <td>${supplierActions(supplier, toggleText)}</td>
             </tr>`;
         }).join('');
 
         mobileCards.innerHTML = suppliers.map(function (supplier) {
             const supplierId = parseInt(supplier.supplier_id || 0, 10);
             const toggleText = parseInt(supplier.status, 10) === 1 ? 'Deactivate' : 'Activate';
-            return `<div class="mp-mobile-card"><div class="d-flex gap-2"><div class="mp-avatar">${supplierInitial(supplier.supplier_name)}</div><div class="flex-grow-1"><div class="d-flex justify-content-between gap-2"><div><div class="mp-title">${escapeHtml(supplier.supplier_name)}</div><div class="mp-sub">${escapeHtml(supplier.mobile || '-')}</div></div>${statusBadge(supplier.status)}</div><div class="mp-sub mt-2">GSTIN: ${escapeHtml(supplier.gstin || '-')}</div><div class="fw-bold mt-1">Balance: ${money.format(parseFloat(supplier.calculated_balance ?? supplier.current_outstanding ?? 0))}</div><div class="mt-2">${supplierActions(supplierId, toggleText)}</div></div></div></div>`;
+            return `<div class="mp-mobile-card"><div class="d-flex gap-2"><div class="mp-avatar">${supplierInitial(supplier.supplier_name)}</div><div class="flex-grow-1"><div class="d-flex justify-content-between gap-2"><div><div class="mp-title">${escapeHtml(supplier.supplier_name)}</div><div class="mp-sub">${escapeHtml(supplier.mobile || '-')}</div></div>${statusBadge(supplier.status)}</div><div class="mp-sub mt-2">GSTIN: ${escapeHtml(supplier.gstin || '-')}</div><div class="fw-bold mt-1">Balance: ${money.format(parseFloat(supplier.calculated_balance ?? supplier.current_outstanding ?? 0))}</div><div class="mt-2">${supplierActions(supplier, toggleText)}</div></div></div></div>`;
         }).join('');
     }
 
@@ -817,7 +843,7 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
         const data = await apiPost(formData); showMessage(data.success ? 'success' : 'error', data.message || 'Status update failed.'); if (data.success) await loadSuppliers();
     }
     async function deleteSupplier(supplierId) {
-        if (!confirm('Delete this supplier? If used in Stock Inward or ledger, delete will be blocked.')) return;
+        if (!confirm('Delete this supplier permanently? Delete is allowed only when the supplier is INACTIVE and the calculated balance is ZERO.')) return;
         const formData = new FormData(); formData.append('action', 'delete_supplier'); formData.append('supplier_id', supplierId);
         const data = await apiPost(formData); showMessage(data.success ? 'success' : 'error', data.message || 'Delete failed.'); if (data.success) await loadSuppliers();
     }
@@ -888,6 +914,16 @@ $permissions = supplier_page_permissions($conn, 'suppliers.php');
 
         if (deleteBtn) {
             event.preventDefault();
+
+            if (deleteBtn.dataset.deleteEligible !== '1') {
+                showMessage(
+                    'warning',
+                    deleteBtn.dataset.deleteReason ||
+                    'Delete is allowed only for inactive suppliers with zero calculated balance.'
+                );
+                return;
+            }
+
             deleteSupplier(deleteBtn.dataset.id);
         }
 
