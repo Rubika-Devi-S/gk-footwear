@@ -916,6 +916,32 @@ if ($businessId <= 0) {
     // ============================================
     async function sendThermalPrint(printData) {
         try {
+            printData = printData || {};
+
+            const originalBillNo = String(
+                printData.BillNo ||
+                printData.OriginalBillNo ||
+                (returnExchangeState.bill && returnExchangeState.bill.bill_no) ||
+                ''
+            ).trim();
+
+            if (!originalBillNo) {
+                throw new Error('Original bill number is missing for thermal printing.');
+            }
+
+            /*
+             * Pass the bill number in both properties for compatibility with
+             * old and new ThermalPrinterInvoice builds.
+             */
+            printData.BillNo = originalBillNo;
+            printData.OriginalBillNo = originalBillNo;
+
+            console.log(
+                'Sending Return/Exchange thermal print for bill:',
+                originalBillNo,
+                printData
+            );
+
             const response = await fetch(printServiceUrl, {
                 method: 'POST',
                 headers: {
@@ -937,8 +963,36 @@ if ($businessId <= 0) {
     // BUILD PRINT DATA - FIXED for Return & Exchange
     // ============================================
     function buildPrintData(data, printType) {
-        const bill = data.bill || {};
+        data = data || {};
+
+        /*
+         * Always keep the original sales bill number separate from the
+         * return/exchange transaction number.
+         *
+         * The thermal service prints BillNo. Therefore BillNo must contain
+         * the original bill selected in this module, not the generated
+         * return/exchange transaction number.
+         */
+        const stateBill = returnExchangeState.bill || {};
+        const bill = data.bill || data.original_bill || stateBill || {};
         const items = data.items || [];
+
+        const originalBillNo = String(
+            data.original_bill_no ||
+            data.original_bill_number ||
+            data.bill_no ||
+            bill.bill_no ||
+            stateBill.bill_no ||
+            ''
+        ).trim();
+
+        const transactionNo = String(
+            data.transaction_no ||
+            data.return_no ||
+            data.exchange_no ||
+            data.return_exchange_no ||
+            ''
+        ).trim();
         
         // For Return: Use return_items from the response
         // For Exchange: Use exchange_items from the response
@@ -1116,8 +1170,15 @@ if ($businessId <= 0) {
             "ShopName": "GK FOOTWEAR",
             "Address": "Gandhi Nagar, Krishnagiri.",
             "InvoiceTitle": printType === 'RETURN' ? 'RETURN INVOICE' : (printType === 'EXCHANGE' ? 'EXCHANGE INVOICE' : 'BILL OF SUPPLY'),
-            "BillNo": data.transaction_no || bill.bill_no || '',
-            "OrderNo": bill.order_no || 'ORD-' + (bill.bill_no || ''),
+            /*
+             * BillNo is the field consumed and printed by the local .NET
+             * thermal service. Keep the generated return/exchange number in
+             * TransactionNo so the two references never get mixed.
+             */
+            "BillNo": originalBillNo,
+            "OriginalBillNo": originalBillNo,
+            "TransactionNo": transactionNo,
+            "OrderNo": bill.order_no || 'ORD-' + originalBillNo,
             "Date": new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'2-digit', year:'numeric' }),
             "Time": new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true }),
             "Customer": bill.customer_name || 'Walk-in Customer',
@@ -1130,7 +1191,7 @@ if ($businessId <= 0) {
             "GrandTotal": grandTotal,
             "Paid": paidAmount,
             "Balance": balanceAmount,
-            "Barcode": data.barcode || bill.bill_barcode || bill.barcode_value || data.transaction_no || '',
+            "Barcode": data.barcode || bill.bill_barcode || bill.barcode_value || originalBillNo || transactionNo,
             "Items": printItems
         };
     }
@@ -1192,9 +1253,20 @@ if ($businessId <= 0) {
         if (!window.confirm('Confirm selected product return?')) return;
 
         try {
+            const originalBillNo = String(
+                returnExchangeState.bill.bill_no || ''
+            ).trim();
+
+            if (!originalBillNo) {
+                showMessage('error', 'Original bill number is missing. Search the bill again.');
+                return;
+            }
+
             const data = await apiPost({
                 action: 'create_return',
                 bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
+                bill_no: originalBillNo,
+                original_bill_no: originalBillNo,
                 refund_option: document.getElementById('returnRefundOption').value,
                 notes: document.getElementById('returnNotes').value,
                 items: items,
@@ -1210,9 +1282,19 @@ if ($businessId <= 0) {
 
             const printData = buildPrintData({
                 ...data,
+                bill: { ...returnExchangeState.bill },
+                original_bill_no: originalBillNo,
+                bill_no: originalBillNo,
                 return_items: returnItems,
                 collected_by: <?= json_encode($cashierName) ?>
             }, 'RETURN');
+
+            /*
+             * Final assignment guarantees the selected bill number reaches
+             * the .NET service even when the API response omits bill details.
+             */
+            printData.BillNo = originalBillNo;
+            printData.OriginalBillNo = originalBillNo;
             
             const printResult = await sendThermalPrint(printData);
             if (printResult.success) {
@@ -1352,9 +1434,20 @@ if ($businessId <= 0) {
         if (!window.confirm('Confirm selected product exchange?')) return;
 
         try {
+            const originalBillNo = String(
+                returnExchangeState.bill.bill_no || ''
+            ).trim();
+
+            if (!originalBillNo) {
+                showMessage('error', 'Original bill number is missing. Search the bill again.');
+                return;
+            }
+
             const data = await apiPost({
                 action: 'create_exchange',
                 bill_id: parseInt(returnExchangeState.bill.bill_id, 10),
+                bill_no: originalBillNo,
+                original_bill_no: originalBillNo,
                 refund_option: document.getElementById('exchangeRefundOption').value,
                 collect_option: document.getElementById('exchangeCollectOption').value,
                 notes: document.getElementById('exchangeNotes').value,
@@ -1371,9 +1464,15 @@ if ($businessId <= 0) {
 
             const printData = buildPrintData({
                 ...data,
+                bill: { ...returnExchangeState.bill },
+                original_bill_no: originalBillNo,
+                bill_no: originalBillNo,
                 exchange_items: exchangeItems,
                 collected_by: <?= json_encode($cashierName) ?>
             }, 'EXCHANGE');
+
+            printData.BillNo = originalBillNo;
+            printData.OriginalBillNo = originalBillNo;
             
             const printResult = await sendThermalPrint(printData);
             if (printResult.success) {
@@ -1674,11 +1773,32 @@ if ($businessId <= 0) {
 
             const printType = String(type || data.transaction_type || 'RETURN').toUpperCase();
             
-            // Build print data
+            /*
+             * History APIs may return the bill number under different keys.
+             * Resolve it before building the thermal payload.
+             */
+            const historyBill = data.bill || data.original_bill || {};
+            const historyBillNo = String(
+                data.original_bill_no ||
+                data.original_bill_number ||
+                data.bill_no ||
+                historyBill.bill_no ||
+                (returnExchangeState.bill && returnExchangeState.bill.bill_no) ||
+                ''
+            ).trim();
+
             const printData = buildPrintData({
                 ...data,
+                bill: historyBill,
+                original_bill_no: historyBillNo,
+                bill_no: historyBillNo,
                 collected_by: <?= json_encode($cashierName) ?>
             }, printType);
+
+            if (historyBillNo) {
+                printData.BillNo = historyBillNo;
+                printData.OriginalBillNo = historyBillNo;
+            }
 
             const result = await sendThermalPrint(printData);
             if (result.success) {
